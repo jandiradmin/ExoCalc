@@ -32,6 +32,7 @@ public final class RateStore {
     private var crypto: [String: Double] = [:]   // USD per 1 coin
     private let cacheURL: URL?
     private var loading = false
+    private var lastAttempt: Date?
 
     private struct Cache: Codable {
         var market: [String: Double]
@@ -51,8 +52,12 @@ public final class RateStore {
         perUSD[code] != nil || RateStore.commonCodes.contains(code)
     }
 
+    /// True when rates should be refreshed: never loaded, older than 4 hours,
+    /// or a source is missing (retried at most every 5 minutes).
     public var isStale: Bool {
+        if let a = lastAttempt, Date().timeIntervalSince(a) < 300 { return false }
         guard let u = updated else { return true }
+        if crypto.isEmpty || market.isEmpty { return true }
         return Date().timeIntervalSince(u) > 4 * 3600
     }
 
@@ -91,12 +96,14 @@ public final class RateStore {
             return
         }
         loading = true
+        lastAttempt = Date()
         let group = DispatchGroup()
         let lock = NSLock()
         var newMarket: [String: Double]? = nil
         var newNBU: [String: Double]? = nil
         var newNBUDate: String? = nil
         var newCrypto: [String: Double]? = nil
+        var backupCrypto: [String: Double]? = nil
 
         group.enter()
         RateStore.fetch("https://open.er-api.com/v6/latest/USD") { obj in
@@ -141,12 +148,32 @@ public final class RateStore {
             group.leave()
         }
 
+        // Backup crypto source (Coinbase): rates are "coins per 1 USD".
+        group.enter()
+        RateStore.fetch("https://api.coinbase.com/v2/exchange-rates?currency=USD") { obj in
+            if let dict = obj as? [String: Any], let data = dict["data"] as? [String: Any],
+               let r = data["rates"] as? [String: Any] {
+                var m: [String: Double] = [:]
+                for code in RateStore.cryptoIDs.keys {
+                    if let str = r[code] as? String, let perUSD = Double(str), perUSD > 0 { m[code] = 1 / perUSD }
+                }
+                lock.lock(); backupCrypto = m; lock.unlock()
+            }
+            group.leave()
+        }
+
         group.notify(queue: queue) {
             self.loading = false
             var ok = false
             if let m = newMarket, !m.isEmpty { self.market = m; ok = true }
             if let n = newNBU, !n.isEmpty { self.nbu = n; self.nbuDate = newNBUDate; ok = true }
-            if let c = newCrypto, !c.isEmpty { self.crypto = c; ok = true }
+            if let c = newCrypto, !c.isEmpty {
+                self.crypto = c
+                ok = true
+            } else if let c = backupCrypto, !c.isEmpty {
+                self.crypto = c
+                ok = true
+            }
             if ok {
                 self.updated = Date()
                 self.rebuild()

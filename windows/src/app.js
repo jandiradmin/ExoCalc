@@ -632,5 +632,5 @@ P.onEvent("open-help", () => openPanel("help"));
   P.setHotkey(settings.hotkey).catch(() => flashStatus(tr("hotkeyBusy", settings.hotkey)));
   if (settings.alwaysOnTop) P.setAlwaysOnTop(true);
   if (rates.isStale) refreshRates();
-  setInterval(() => { if (rates.isStale) refreshRates(); }, 30 * 60 * 1000);
+  setInterval(() => { if (rates.isStale) refreshRates(); }, 5 * 60 * 1000);
 })();

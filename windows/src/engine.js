@@ -59,10 +59,16 @@ export class RateStore {
     this.market = {}; this.nbu = {}; this.crypto = {};
     this.updated = null; this.nbuDate = null;
     this.useNBU = true;
+    this.lastAttempt = 0;
     this.perUSD = { USD: 1 };
   }
   knows(code) { return this.perUSD[code] !== undefined || COMMON_CODES.includes(code) || CRYPTO_IDS[code] !== undefined; }
-  get isStale() { return !this.updated || Date.now() - this.updated > 4 * 3600 * 1000; }
+  get isStale() {
+    if (this.lastAttempt && Date.now() - this.lastAttempt < 5 * 60 * 1000) return false;
+    if (!this.updated) return true;
+    if (!Object.keys(this.crypto).length || !Object.keys(this.market).length) return true;
+    return Date.now() - this.updated > 4 * 3600 * 1000;
+  }
   rate(from, to) {
     const a = this.perUSD[from], b = this.perUSD[to];
     return a > 0 && b !== undefined ? b / a : null;
@@ -91,11 +97,13 @@ export class RateStore {
   }
   /** fetchJSON(url) → parsed JSON or null. Returns true if anything was updated. */
   async refresh(fetchJSON) {
+    this.lastAttempt = Date.now();
     const ids = [...new Set(Object.values(CRYPTO_IDS))].sort().join(",");
-    const [m, n, c] = await Promise.all([
+    const [m, n, c, cb] = await Promise.all([
       fetchJSON("https://open.er-api.com/v6/latest/USD").catch(() => null),
       fetchJSON("https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json").catch(() => null),
       fetchJSON(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`).catch(() => null),
+      fetchJSON("https://api.coinbase.com/v2/exchange-rates?currency=USD").catch(() => null),
     ]);
     let ok = false;
     if (m && m.rates && Object.keys(m.rates).length) { this.market = m.rates; ok = true; }
@@ -108,6 +116,15 @@ export class RateStore {
       const map = {};
       for (const [code, id] of Object.entries(CRYPTO_IDS)) if (c[id] && typeof c[id].usd === "number") map[code] = c[id].usd;
       if (Object.keys(map).length) { this.crypto = map; ok = true; }
+    }
+    if (!Object.keys(this.crypto).length || !(c && Object.keys(c).length)) {
+      // Backup crypto source (Coinbase): rates are "coins per 1 USD".
+      const r = cb && cb.data && cb.data.rates;
+      if (r) {
+        const map = {};
+        for (const code of Object.keys(CRYPTO_IDS)) { const v = Number(r[code]); if (v > 0) map[code] = 1 / v; }
+        if (Object.keys(map).length) { this.crypto = map; ok = true; }
+      }
     }
     if (ok) { this.updated = Date.now(); this.rebuild(); }
     return ok;

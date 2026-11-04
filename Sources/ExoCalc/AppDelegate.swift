@@ -50,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         updateRatesStatus()
         refreshRates()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 1800, repeats: true) { [weak self] _ in
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             if self.rates.isStale { self.refreshRates() }
         }

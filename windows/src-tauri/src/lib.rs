@@ -12,10 +12,11 @@ use tauri_plugin_window_state::StateFlags;
 /// Only these files may be read/written by the UI (in the app data folder).
 const FILES: [&str; 4] = ["sheet.json", "history.json", "rates.json", "settings.json"];
 /// Only these hosts may be fetched (exchange rates).
-const HOSTS: [&str; 3] = [
+const HOSTS: [&str; 4] = [
     "https://open.er-api.com/",
     "https://bank.gov.ua/",
     "https://api.coingecko.com/",
+    "https://api.coinbase.com/",
 ];
 
 struct HotkeyState(Mutex<Option<Shortcut>>);
