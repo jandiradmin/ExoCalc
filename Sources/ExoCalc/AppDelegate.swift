@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastHotKey: (Int, Int) = (-1, -1)
     private var refreshTimer: Timer?
     private var lastLang: Lang = L10n.lang
+    private var snapshotMode = false
 
     // MARK: - Lifecycle
 
@@ -31,6 +32,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         calc.hotKeyText = { HotKeyFormat.string(code: AppSettings.shared.hotKeyCode, mods: AppSettings.shared.hotKeyMods) }
         calc.ratesText = { [weak self] in self?.ratesTimeText() ?? "" }
         calc.applyAppearance()
+        if let i = CommandLine.arguments.firstIndex(of: "--snapshot"), i + 1 < CommandLine.arguments.count {
+            makeSnapshot(to: CommandLine.arguments[i + 1])
+            return
+        }
         calc.loadState()
 
         buildMainMenu()
@@ -64,7 +69,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    /// Renders the window with the example sheet to a PNG (for README screenshots) and quits.
+    private func makeSnapshot(to path: String) {
+        snapshotMode = true
+        calc.textView.string = calc.welcomeText()
+        calc.recalc()
+        calc.window.setContentSize(NSSize(width: 760, height: 760))
+        calc.window.center()
+        calc.window.orderFrontRegardless()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.calc.recalc()
+            FileHandle.standardError.write((self.calc.textView.debugSlots() + "\n").data(using: .utf8)!)
+            if let view = self.calc.window.contentView?.superview,
+               let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                view.cacheDisplay(in: view.bounds, to: rep)
+                if let data = rep.representation(using: .png, properties: [:]) {
+                    try? data.write(to: URL(fileURLWithPath: path))
+                }
+            }
+            exit(0)
+        }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
+        if snapshotMode { return }
         calc.recordCurrentLine()
         calc.saveState()
     }
@@ -311,6 +339,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ])
 
         submenu(tr("sheet"), [
+            item(tr("examples"), #selector(CalcWindowController.insertExamples(_:)), "e", [.command, .shift], target: calc),
             item(tr("clearSheet"), #selector(CalcWindowController.clearSheet(_:)), "k", target: calc),
             item(tr("history"), #selector(showHistory), "y", target: self),
             .separator(),

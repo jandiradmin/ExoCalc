@@ -71,6 +71,7 @@ final class CalcTextView: NSTextView {
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
         updateContainerWidth()
+        refreshResults()
     }
 
     private func computeSlots() {
@@ -106,24 +107,40 @@ final class CalcTextView: NSTextView {
         }
     }
 
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
+    /// Results are drawn by a transparent overlay placed above the scroll view
+    /// (drawing inside NSTextView is not shown on recent macOS).
+    weak var overlay: ResultOverlay?
+
+    func debugSlots() -> String {
         computeSlots()
-        for s in slots where s.rect.insetBy(dx: -8, dy: -4).intersects(dirtyRect) {
+        let first = slots.first.map { "\($0.rect) \($0.text.string)" } ?? "none"
+        return "bounds=\(bounds) slots=\(slots.count) first=\(first) overlay=\(String(describing: overlay?.frame)) draws=\(ResultOverlay.drawCount)"
+    }
+
+    func refreshResults() {
+        computeSlots()
+        overlay?.needsDisplay = true
+    }
+
+    fileprivate func drawResults(in view: NSView, _ dirtyRect: NSRect) {
+        computeSlots()
+        for s in slots {
+            let r = convert(s.rect, to: view)
+            guard r.insetBy(dx: -8, dy: -4).intersects(dirtyRect) else { continue }
             if s.line == flashLine {
                 NSColor(white: 1, alpha: 0.14).setFill()
-                NSBezierPath(roundedRect: s.rect.insetBy(dx: -6, dy: -1), xRadius: 4, yRadius: 4).fill()
+                NSBezierPath(roundedRect: r.insetBy(dx: -6, dy: -1), xRadius: 4, yRadius: 4).fill()
             }
-            s.text.draw(at: s.rect.origin)
+            s.text.draw(at: r.origin)
         }
     }
 
     func flash(_ line: Int) {
         flashLine = line
-        needsDisplay = true
+        refreshResults()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             self?.flashLine = nil
-            self?.needsDisplay = true
+            self?.refreshResults()
         }
     }
 
@@ -164,5 +181,16 @@ final class CalcTextView: NSTextView {
         guard let list = completionProvider?(partial), !list.isEmpty else { return nil }
         index.pointee = 0
         return list
+    }
+}
+
+final class ResultOverlay: NSView {
+    static var drawCount = 0
+    weak var owner: CalcTextView?
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override func draw(_ dirtyRect: NSRect) {
+        ResultOverlay.drawCount += 1
+        owner?.drawResults(in: self, dirtyRect)
     }
 }

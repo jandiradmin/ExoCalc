@@ -98,6 +98,7 @@ private let strings: [String: (String, String, String)] = [
     "find…": ("Найти…", "Find…", "Знайти…"),
     "complete": ("Автодополнение", "Autocomplete", "Автодоповнення"),
     "sheet": ("Лист", "Sheet", "Аркуш"),
+    "examples": ("Вставить примеры", "Insert Examples", "Вставити приклади"),
     "clearSheet": ("Очистить лист", "Clear Sheet", "Очистити аркуш"),
     "history": ("История", "History", "Історія"),
     "bigger": ("Крупнее", "Bigger", "Більше"),

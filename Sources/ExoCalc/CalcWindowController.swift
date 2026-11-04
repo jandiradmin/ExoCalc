@@ -18,48 +18,58 @@ final class CalcWindowController: NSObject, NSWindowDelegate, NSTextViewDelegate
     private var statusOverrideUntil = Date.distantPast
     private let statusHeight: CGFloat = 24
 
-    static var welcome: String {
+    private static func welcomeLines(hotkey: String) -> [String] {
         switch L10n.lang {
-        case .ru: return """
-        # ExoCalc — F1 справка, Esc спрятать
-        14/105
-        600 долларов в гривнах
-        18 цельсия в фаренгейтах
-        100 км в милях
-        300 000,00 * 2
-        20% от 1500
-
-        Аренда: 2000
-        Свет: 150
-        итого
-        """
-        case .uk: return """
-        # ExoCalc — F1 довідка, Esc сховати
-        14/105
-        600 доларів у гривнях
-        18 цельсія у фаренгейтах
-        100 км у милях
-        300 000,00 * 2
-        20% від 1500
-
-        Оренда: 2000
-        Світло: 150
-        разом
-        """
-        case .en: return """
-        # ExoCalc — F1 help, Esc to hide
-        14/105
-        600 usd in uah
-        18 celsius in fahrenheit
-        100 km in miles
-        300,000.00 * 2
-        20% of 1500
-
-        Rent: 2000
-        Power: 150
-        total
-        """
+        case .ru: return [
+            "# Добро пожаловать в ExoCalc! Пишите выражение — ответ появится справа.",
+            "# F1 — справка · Esc — спрятать · \(hotkey) — вызвать из любого приложения",
+            "14*5", "500*4", "(2+2)*4", "2^10", "1/3", "",
+            "# Проценты", "20% от 1500", "1500 - 20%", "",
+            "# Валюты (курсы обновляются сами)", "600 долларов в гривнах", "100 евро в грн", "0.01 btc в usd", "",
+            "# Единицы измерения", "18 цельсия в фаренгейтах", "100 км в милях", "1 галлон в литрах", "70 кг в фунтах", "",
+            "# Числа в любом формате", "300 000,00 * 2", "300,000.00 * 2", "",
+            "# Переменные и итоги", "цена = 1250", "цена * 3", "",
+            "Аренда: 2000", "Свет: 150", "итого",
+        ]
+        case .uk: return [
+            "# Ласкаво просимо до ExoCalc! Пишіть вираз — відповідь з’явиться праворуч.",
+            "# F1 — довідка · Esc — сховати · \(hotkey) — викликати з будь-якої програми",
+            "14*5", "500*4", "(2+2)*4", "2^10", "1/3", "",
+            "# Відсотки", "20% від 1500", "1500 - 20%", "",
+            "# Валюти (курси оновлюються самі)", "600 доларів у гривнях", "100 євро у грн", "0.01 btc у usd", "",
+            "# Одиниці виміру", "18 цельсія у фаренгейтах", "100 км у милях", "1 галон у літрах", "70 кг у фунтах", "",
+            "# Числа в будь-якому форматі", "300 000,00 * 2", "300,000.00 * 2", "",
+            "# Змінні та підсумки", "ціна = 1250", "ціна * 3", "",
+            "Оренда: 2000", "Світло: 150", "разом",
+        ]
+        case .en: return [
+            "# Welcome to ExoCalc! Type an expression — the answer appears on the right.",
+            "# F1 — help · Esc — hide · \(hotkey) — open from any app",
+            "14*5", "500*4", "(2+2)*4", "2^10", "1/3", "",
+            "# Percentages", "20% of 1500", "1500 - 20%", "",
+            "# Currencies (rates update automatically)", "600 usd in uah", "100 eur in usd", "0.01 btc in usd", "",
+            "# Units", "18 celsius in fahrenheit", "100 km in miles", "1 gallon in liters", "70 kg in lb", "",
+            "# Numbers in any format", "300 000,00 * 2", "300,000.00 * 2", "",
+            "# Variables and totals", "price = 1250", "price * 3", "",
+            "Rent: 2000", "Power: 150", "total",
+        ]
         }
+    }
+
+    /// Example sheet; each line shows its answer after "=", like a worked example.
+    func welcomeText() -> String {
+        let lines = CalcWindowController.welcomeLines(hotkey: hotKeyText())
+        let res = engine.evaluate(lines: lines)
+        return zip(lines, res).map { line, r in
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.isEmpty || t.hasPrefix("#") || t.contains("=") { return line }
+            guard let d = r.display else { return line }
+            return "\(line) = \(d)"
+        }.joined(separator: "\n")
+    }
+
+    @objc func insertExamples(_ sender: Any?) {
+        insertLine("\n" + welcomeText())
     }
 
     init(engine: Engine, history: History) {
@@ -146,6 +156,17 @@ final class CalcWindowController: NSObject, NSWindowDelegate, NSTextViewDelegate
         cv.addSubview(scrollView)
         cv.addSubview(statusLabel)
 
+        let overlay = ResultOverlay(frame: scrollView.frame)
+        overlay.autoresizingMask = [.width, .height]
+        overlay.owner = tv
+        cv.addSubview(overlay, positioned: .above, relativeTo: scrollView)
+        tv.overlay = overlay
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification,
+                                               object: scrollView.contentView, queue: .main) { [weak tv] _ in
+            tv?.refreshResults()
+        }
+
         window.center()
         window.setFrameAutosaveName("ExoCalcMain")
 
@@ -158,7 +179,7 @@ final class CalcWindowController: NSObject, NSWindowDelegate, NSTextViewDelegate
     // MARK: - State
 
     func loadState() {
-        if let s = Storage.loadSheet(), !s.text.hasPrefix("# ExoCalc — F1 справка, Esc спрятать\n14/105\n600 usd in uah") {
+        if let s = Storage.loadSheet(), !s.text.hasPrefix("# ExoCalc — F1") {
             textView.string = s.text
             let loc = min(max(0, s.selection), (s.text as NSString).length)
             textView.setSelectedRange(NSRange(location: loc, length: 0))
@@ -170,7 +191,7 @@ final class CalcWindowController: NSObject, NSWindowDelegate, NSTextViewDelegate
                 self.scrollView.reflectScrolledClipView(self.scrollView.contentView)
             }
         } else {
-            textView.string = CalcWindowController.welcome
+            textView.string = welcomeText()
             textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
             recalc()
         }
@@ -226,7 +247,7 @@ final class CalcWindowController: NSObject, NSWindowDelegate, NSTextViewDelegate
         textView.results = results
         applyHighlights(ranges, results)
         updateResultColumn()
-        textView.needsDisplay = true
+        textView.refreshResults()
         window.invalidateCursorRects(for: textView)
         updateStatus()
     }

@@ -12,8 +12,8 @@ if [[ "${1:-}" == "--test" ]]; then
 fi
 
 echo "▸ Сборка…"
-swift build -c release
-BIN="$(swift build -c release --show-bin-path)"
+swift build -c release --arch arm64 --arch x86_64
+BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)"
 
 APP="build/ExoCalc.app"
 rm -rf "$APP"

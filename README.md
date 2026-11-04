@@ -2,7 +2,9 @@
 
 **[English](#english) · [Українська](#українська) · [Русский](#русский)**
 
-![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black) ![Swift](https://img.shields.io/badge/Swift-5.9-orange) ![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black) ![Apple Silicon + Intel](https://img.shields.io/badge/Apple%20Silicon%20%2B%20Intel-universal-blue) ![Swift](https://img.shields.io/badge/Swift-5.9-orange) ![License: MIT](https://img.shields.io/badge/license-MIT-green)
+
+<p align="center"><img src="docs/screenshot.png" width="640" alt="ExoCalc"></p>
 
 ---
 
@@ -29,7 +31,7 @@ ExoCalc is a minimalist notepad calculator for macOS. Type calculations line by 
 
 ### Install from source
 
-Requires macOS 13+ and the Command Line Tools (`xcode-select --install`). Xcode is not needed.
+Runs on Apple Silicon and Intel Macs. Requires macOS 13+ and the Command Line Tools (`xcode-select --install`). Xcode is not needed.
 
 ```
 git clone https://github.com/jandiradmin/ExoCalc.git && cd ExoCalc
@@ -65,7 +67,7 @@ ExoCalc — мінімалістичний калькулятор-блокнот
 
 ### Встановлення з вихідного коду
 
-Потрібні macOS 13+ і Command Line Tools (`xcode-select --install`). Xcode не потрібен.
+Працює на Mac з Apple Silicon та Intel. Потрібні macOS 13+ і Command Line Tools (`xcode-select --install`). Xcode не потрібен.
 
 ```
 git clone https://github.com/jandiradmin/ExoCalc.git && cd ExoCalc
@@ -101,7 +103,7 @@ ExoCalc — минималистичный калькулятор-блокнот
 
 ### Установка из исходников
 
-Нужны macOS 13+ и Command Line Tools (`xcode-select --install`). Xcode не нужен.
+Работает на Mac с Apple Silicon и Intel. Нужны macOS 13+ и Command Line Tools (`xcode-select --install`). Xcode не нужен.
 
 ```
 git clone https://github.com/jandiradmin/ExoCalc.git && cd ExoCalc
