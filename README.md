@@ -2,7 +2,7 @@
 
 **[English](#english) · [Українська](#українська) · [Русский](#русский)**
 
-![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black) ![Apple Silicon + Intel](https://img.shields.io/badge/Apple%20Silicon%20%2B%20Intel-universal-blue) ![Swift](https://img.shields.io/badge/Swift-5.9-orange) ![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black) ![Windows 10/11](https://img.shields.io/badge/Windows-10%2F11-0078D6) ![Apple Silicon + Intel](https://img.shields.io/badge/Apple%20Silicon%20%2B%20Intel-universal-blue) ![Swift](https://img.shields.io/badge/Swift-5.9-orange) ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
 <p align="center"><img src="docs/screenshot.png" width="640" alt="ExoCalc"></p>
 
@@ -10,7 +10,7 @@
 
 ## English
 
-ExoCalc is a minimalist notepad calculator for macOS. Type calculations line by line and the result appears on the right. It converts currencies (world rates, the official NBU hryvnia rate, crypto) and units, and understands plain English, Ukrainian and Russian words.
+ExoCalc is a minimalist notepad calculator for macOS and Windows. Type calculations line by line and the result appears on the right. It converts currencies (world rates, the official NBU hryvnia rate, crypto) and units, and understands plain English, Ukrainian and Russian words.
 
 ### Features
 
@@ -29,6 +29,13 @@ ExoCalc is a minimalist notepad calculator for macOS. Type calculations line by 
 - **Settings:** language (EN/UK/RU), decimal and thousands separators, decimal places, monospaced font, hotkey
 - **CLI:** `exocalc "600 usd in uah"`
 
+### Download
+
+**[⬇ Latest release](https://github.com/jandiradmin/ExoCalc/releases/latest)**
+
+- **Windows 10/11:** `ExoCalc_x.y.z_x64-setup.exe`. The app is not code-signed yet, so SmartScreen may warn: click *More info → Run anyway*. Global hotkey: Ctrl+Alt+C.
+- **macOS 13+ (Apple Silicon and Intel):** `ExoCalc-macOS.zip`. Unzip, move ExoCalc.app to Applications, then right-click it → *Open* the first time (the app is not notarized yet).
+
 ### Install from source
 
 Runs on Apple Silicon and Intel Macs. Requires macOS 13+ and the Command Line Tools (`xcode-select --install`). Xcode is not needed.
@@ -38,6 +45,8 @@ git clone https://github.com/jandiradmin/ExoCalc.git && cd ExoCalc
 ./build.sh --install
 ```
 
+Windows: `cd windows && npm ci && npx tauri build` (Rust and Node.js required).
+
 ### Data and privacy
 
 Everything is stored locally in `~/Library/Application Support/ExoCalc/`. The only network requests fetch exchange rates from open.er-api.com, bank.gov.ua and api.coingecko.com.
@@ -46,7 +55,7 @@ Everything is stored locally in `~/Library/Application Support/ExoCalc/`. The on
 
 ## Українська
 
-ExoCalc — мінімалістичний калькулятор-блокнот для macOS. Пишіть обчислення рядками, результат з’являється праворуч. Перераховує валюти (світові курси, офіційний курс гривні НБУ, криптовалюти) та одиниці виміру, розуміє звичайні слова українською, англійською й російською.
+ExoCalc — мінімалістичний калькулятор-блокнот для macOS і Windows. Пишіть обчислення рядками, результат з’являється праворуч. Перераховує валюти (світові курси, офіційний курс гривні НБУ, криптовалюти) та одиниці виміру, розуміє звичайні слова українською, англійською й російською.
 
 ### Можливості
 
@@ -65,6 +74,13 @@ ExoCalc — мінімалістичний калькулятор-блокнот
 - **Налаштування:** мова (UK/EN/RU), десятковий роздільник і роздільник тисяч, кількість знаків, моноширинний шрифт, гаряча клавіша
 - **Командний рядок:** `exocalc "600 usd in uah"`
 
+### Завантаження
+
+**[⬇ Остання версія](https://github.com/jandiradmin/ExoCalc/releases/latest)**
+
+- **Windows 10/11:** `ExoCalc_x.y.z_x64-setup.exe`. Програма поки не підписана, тому SmartScreen може попередити: натисніть *Докладніше → Усе одно запустити*. Гаряча клавіша: Ctrl+Alt+C.
+- **macOS 13+ (Apple Silicon та Intel):** `ExoCalc-macOS.zip`. Розпакуйте, перенесіть ExoCalc.app у «Програми» і вперше відкрийте через правий клік → *Відкрити* (програма ще не нотаризована).
+
 ### Встановлення з вихідного коду
 
 Працює на Mac з Apple Silicon та Intel. Потрібні macOS 13+ і Command Line Tools (`xcode-select --install`). Xcode не потрібен.
@@ -74,6 +90,8 @@ git clone https://github.com/jandiradmin/ExoCalc.git && cd ExoCalc
 ./build.sh --install
 ```
 
+Windows: `cd windows && npm ci && npx tauri build` (Rust and Node.js required).
+
 ### Дані та приватність
 
 Усе зберігається локально в `~/Library/Application Support/ExoCalc/`. Мережеві запити — лише курси валют з open.er-api.com, bank.gov.ua та api.coingecko.com.
@@ -82,7 +100,7 @@ git clone https://github.com/jandiradmin/ExoCalc.git && cd ExoCalc
 
 ## Русский
 
-ExoCalc — минималистичный калькулятор-блокнот для macOS. Пишите вычисления строками, результат появляется справа. Пересчитывает валюты (мировые курсы, официальный курс гривны НБУ, криптовалюты) и единицы измерения, понимает обычные слова на русском, украинском и английском.
+ExoCalc — минималистичный калькулятор-блокнот для macOS и Windows. Пишите вычисления строками, результат появляется справа. Пересчитывает валюты (мировые курсы, официальный курс гривны НБУ, криптовалюты) и единицы измерения, понимает обычные слова на русском, украинском и английском.
 
 ### Возможности
 
@@ -101,6 +119,13 @@ ExoCalc — минималистичный калькулятор-блокнот
 - **Настройки:** язык (RU/UK/EN), десятичный разделитель и разделитель тысяч, число знаков, моноширинный шрифт, горячая клавиша
 - **Командная строка:** `exocalc "600 usd in uah"`
 
+### Скачать
+
+**[⬇ Последняя версия](https://github.com/jandiradmin/ExoCalc/releases/latest)**
+
+- **Windows 10/11:** `ExoCalc_x.y.z_x64-setup.exe`. Программа пока не подписана, поэтому SmartScreen может предупредить: нажмите *Подробнее → Выполнить в любом случае*. Горячая клавиша: Ctrl+Alt+C.
+- **macOS 13+ (Apple Silicon и Intel):** `ExoCalc-macOS.zip`. Распакуйте, перенесите ExoCalc.app в «Программы» и в первый раз откройте через правый клик → *Открыть* (программа ещё не нотаризована).
+
 ### Установка из исходников
 
 Работает на Mac с Apple Silicon и Intel. Нужны macOS 13+ и Command Line Tools (`xcode-select --install`). Xcode не нужен.
@@ -109,6 +134,8 @@ ExoCalc — минималистичный калькулятор-блокнот
 git clone https://github.com/jandiradmin/ExoCalc.git && cd ExoCalc
 ./build.sh --install
 ```
+
+Windows: `cd windows && npm ci && npx tauri build` (Rust and Node.js required).
 
 ### Данные и приватность
 
