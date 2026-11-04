@@ -62,7 +62,7 @@ final class CalcWindowController: NSObject, NSWindowDelegate, NSTextViewDelegate
         let res = engine.evaluate(lines: lines)
         return zip(lines, res).map { line, r in
             let t = line.trimmingCharacters(in: .whitespaces)
-            if t.isEmpty || t.hasPrefix("#") || t.contains("=") { return line }
+            if t.isEmpty || t.hasPrefix("#") || t.contains("=") || t.allSatisfy({ $0.isLetter }) { return line }
             guard let d = r.display else { return line }
             return "\(line) = \(d)"
         }.joined(separator: "\n")

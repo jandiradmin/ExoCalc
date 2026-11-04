@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ExoCalc</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="wrap">
+    <div id="layer">
+      <div id="hl" aria-hidden="true"></div>
+      <textarea id="ta" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" wrap="soft"></textarea>
+      <div id="results"></div>
+    </div>
+  </div>
+
+  <footer id="bar">
+    <span id="status"></span>
+    <span id="buttons">
+      <button id="btnHelp" class="icon" type="button">?</button>
+      <button id="btnHistory" class="icon" type="button">⟲</button>
+      <button id="btnSettings" class="icon" type="button">⚙</button>
+    </span>
+  </footer>
+
+  <div id="modal" hidden>
+    <div id="panel" role="dialog">
+      <header><h2 id="panelTitle"></h2><button id="panelClose" class="icon" type="button">✕</button></header>
+      <div id="panelBody"></div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

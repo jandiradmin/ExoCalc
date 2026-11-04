@@ -1,0 +1,904 @@
+// ExoCalc engine — JavaScript port of the macOS ExoCalcCore (Swift).
+// Pure ES module: runs in the app (WebView2) and in Node for tests.
+
+import { UNIT_DEFS, CURRENCY_ALIASES, CRYPTO_IDS, COMMON_CODES, STRINGS } from "./data.js";
+
+// ───────────────────────── Localization ─────────────────────────
+
+export const L10n = { lang: "ru" };
+const LANG_INDEX = { ru: 0, en: 1, uk: 2 };
+
+export function resolveLang(code, preferred = []) {
+  if (code === "ru" || code === "en" || code === "uk") return code;
+  for (const p of preferred) {
+    if (p.startsWith("uk")) return "uk";
+    if (p.startsWith("ru")) return "ru";
+    if (p.startsWith("en")) return "en";
+  }
+  return "en";
+}
+
+const extraStrings = {};
+export function addStrings(table) { Object.assign(extraStrings, table); }
+
+export function tr(key, ...args) {
+  const row = extraStrings[key] || STRINGS[key];
+  if (!row) return key;
+  let s = row[LANG_INDEX[L10n.lang] ?? 0];
+  args.forEach((a, i) => { s = s.split(`{${i}}`).join(String(a)); });
+  return s;
+}
+
+export class CalcError extends Error {}
+
+// ───────────────────────── Units ─────────────────────────
+
+export function makeUnit(id, dim, factor, offset = 0, isCrypto = false) {
+  return { id, dim, factor, offset, isCrypto };
+}
+const sameUnit = (a, b) => a.id === b.id && a.dim === b.dim;
+
+const ENDINGS = [
+  "ами", "ями", "ією", "ах", "ях", "ов", "ев", "ей", "ів", "їв", "ам", "ям", "ом", "ем", "ою", "ею",
+  "ий", "ій", "ия", "ія", "ию", "ію", "ые", "ых", "и", "ы", "і", "а", "я", "у", "ю", "е", "є", "о", "ь", "й",
+];
+const hasCyrillic = (s) => /[Ѐ-ӿ]/.test(s);
+function stem(s) {
+  return s.toLowerCase().split(" ").filter((p) => p.length).map((w) => {
+    if ([...w].length < 4 || !hasCyrillic(w)) return w;
+    for (const e of ENDINGS) {
+      if (w.endsWith(e) && [...w].length - [...e].length >= 3) return w.slice(0, w.length - e.length);
+    }
+    return w;
+  }).join(" ");
+}
+const isCodeLike = (s) => /^[A-Za-z]{3,5}$/.test(s);
+
+export class RateStore {
+  constructor() {
+    this.market = {}; this.nbu = {}; this.crypto = {};
+    this.updated = null; this.nbuDate = null;
+    this.useNBU = true;
+    this.perUSD = { USD: 1 };
+  }
+  knows(code) { return this.perUSD[code] !== undefined || COMMON_CODES.includes(code) || CRYPTO_IDS[code] !== undefined; }
+  get isStale() { return !this.updated || Date.now() - this.updated > 4 * 3600 * 1000; }
+  rate(from, to) {
+    const a = this.perUSD[from], b = this.perUSD[to];
+    return a > 0 && b !== undefined ? b / a : null;
+  }
+  setUseNBU(v) { if (this.useNBU !== v) { this.useNBU = v; this.rebuild(); } }
+  setTestRates(r) { this.market = { ...r }; this.nbu = {}; this.crypto = {}; this.rebuild(); }
+  rebuild() {
+    const r = { ...this.market };
+    const usd = this.nbu.USD;
+    if (this.useNBU && usd > 0) {
+      r.UAH = usd;
+      for (const [code, uahPer] of Object.entries(this.nbu)) if (uahPer > 0 && code !== "UAH") r[code] = usd / uahPer;
+    }
+    for (const [code, price] of Object.entries(this.crypto)) if (price > 0) r[code] = 1 / price;
+    r.USD = 1;
+    this.perUSD = r;
+  }
+  toJSON() {
+    return { market: this.market, nbu: this.nbu, crypto: this.crypto, updated: this.updated, nbuDate: this.nbuDate };
+  }
+  load(obj) {
+    if (!obj) return;
+    this.market = obj.market || {}; this.nbu = obj.nbu || {}; this.crypto = obj.crypto || {};
+    this.updated = obj.updated || null; this.nbuDate = obj.nbuDate || null;
+    this.rebuild();
+  }
+  /** fetchJSON(url) → parsed JSON or null. Returns true if anything was updated. */
+  async refresh(fetchJSON) {
+    const ids = [...new Set(Object.values(CRYPTO_IDS))].sort().join(",");
+    const [m, n, c] = await Promise.all([
+      fetchJSON("https://open.er-api.com/v6/latest/USD").catch(() => null),
+      fetchJSON("https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json").catch(() => null),
+      fetchJSON(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`).catch(() => null),
+    ]);
+    let ok = false;
+    if (m && m.rates && Object.keys(m.rates).length) { this.market = m.rates; ok = true; }
+    if (Array.isArray(n) && n.length) {
+      const map = {};
+      for (const it of n) if (it.cc && typeof it.rate === "number") map[it.cc] = it.rate;
+      this.nbu = map; this.nbuDate = n[0].exchangedate || null; ok = true;
+    }
+    if (c && typeof c === "object") {
+      const map = {};
+      for (const [code, id] of Object.entries(CRYPTO_IDS)) if (c[id] && typeof c[id].usd === "number") map[code] = c[id].usd;
+      if (Object.keys(map).length) { this.crypto = map; ok = true; }
+    }
+    if (ok) { this.updated = Date.now(); this.rebuild(); }
+    return ok;
+  }
+}
+
+export class UnitRegistry {
+  constructor(rates) {
+    this.rates = rates;
+    this.exact = new Map(); this.lower = new Map();
+    this.curExact = new Map(); this.curLower = new Map();
+    this.stemUnit = new Map(); this.stemCur = new Map();
+    const words = new Set();
+    for (const [id, dim, f, aliases, off] of UNIT_DEFS) {
+      const u = makeUnit(id, dim, f, off);
+      for (const a of [id, ...aliases]) {
+        if (!this.exact.has(a)) this.exact.set(a, u);
+        const l = a.toLowerCase();
+        if (!this.lower.has(l)) this.lower.set(l, u);
+        if (hasCyrillic(a)) { const st = stem(a); if (!this.stemUnit.has(st)) this.stemUnit.set(st, u); }
+        words.add(a);
+      }
+    }
+    for (const [code, aliases] of CURRENCY_ALIASES) {
+      words.add(code);
+      for (const a of aliases) {
+        if (!this.curExact.has(a)) this.curExact.set(a, code);
+        const l = a.toLowerCase();
+        if (!this.curLower.has(l)) this.curLower.set(l, code);
+        if (hasCyrillic(a)) { const st = stem(a); if (!this.stemCur.has(st)) this.stemCur.set(st, code); }
+        words.add(a);
+      }
+    }
+    for (const c of COMMON_CODES) words.add(c);
+    this.completionWords = [...words].filter((w) => /^\p{L}/u.test(w)).sort();
+  }
+  currency(code) { return makeUnit(code, "currency", 1, 0, CRYPTO_IDS[code] !== undefined); }
+  lookup(s) {
+    if (this.exact.has(s)) return this.exact.get(s);
+    if (this.curExact.has(s)) return this.currency(this.curExact.get(s));
+    const codeLike = isCodeLike(s);
+    if (codeLike && s === s.toUpperCase() && this.rates.knows(s)) return this.currency(s);
+    const l = s.toLowerCase();
+    if (this.lower.has(l)) return this.lower.get(l);
+    if (this.curLower.has(l)) return this.currency(this.curLower.get(l));
+    const up = s.toUpperCase();
+    if (codeLike && this.rates.knows(up)) return this.currency(up);
+    if (hasCyrillic(s)) {
+      const st = stem(s);
+      if (this.stemUnit.has(st)) return this.stemUnit.get(st);
+      if (this.stemCur.has(st)) return this.currency(this.stemCur.get(st));
+    }
+    return null;
+  }
+  convert(v, from, to) {
+    if (sameUnit(from, to)) return v;
+    if (from.dim !== to.dim) throw new CalcError(tr("cantConvert", from.id, to.id));
+    if (from.dim === "currency") {
+      const a = this.rates.perUSD[from.id], b = this.rates.perUSD[to.id];
+      if (!(a > 0) || b === undefined) {
+        if (Object.keys(this.rates.perUSD).length <= 1) throw new CalcError(tr("noRates"));
+        throw new CalcError(tr("noRate", this.rates.perUSD[from.id] === undefined ? from.id : to.id));
+      }
+      return (v / a) * b;
+    }
+    const base = v * from.factor + from.offset;
+    return (base - to.offset) / to.factor;
+  }
+}
+
+// ───────────────────────── Lexer ─────────────────────────
+
+const isDigit = (c) => c >= 48 && c <= 57;
+function isLetter(c) {
+  if ((c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95) return true;
+  if (c < 0xb0) return false;
+  if (c === 0xb0 || c === 0xb5) return true;
+  if (c === 0xb2 || c === 0xb3 || c === 0xb7 || c === 0xd7 || c === 0xf7) return false;
+  if (c >= 0xd800 && c <= 0xdfff) return false;
+  return /\p{L}/u.test(String.fromCharCode(c));
+}
+const isIdentCont = (c) => isLetter(c) || isDigit(c) || c === 0xb2 || c === 0xb3;
+
+class Lexer {
+  constructor(text, base, settings) {
+    this.s = text; this.base = base;
+    this.decimal = settings.decimalSeparator === "," ? 44 : 46;
+  }
+  code(i) { return this.s.charCodeAt(i); }
+
+  tokenize() {
+    const s = this.s, n = s.length, toks = [];
+    let i = 0, space = false;
+    const push = (kind, text, a, b, num = 0) => {
+      toks.push({ kind, text, num, start: this.base + a, end: this.base + b, spaceBefore: space });
+      space = false;
+    };
+    while (i < n) {
+      const c = this.code(i);
+      if (c === 32 || c === 9 || c === 0xa0 || c === 0x202f || c === 0x2009) { space = true; i++; continue; }
+      const p = toks[toks.length - 1];
+      const prevAllows = !p || p.kind === "op" || p.kind === "lparen" || p.kind === "sep";
+      const leadingSep = (c === 44 || c === 46) && i + 1 < n && isDigit(this.code(i + 1)) && prevAllows;
+      if (isDigit(c) || leadingSep) {
+        const [v, e] = this.lexNumber(i);
+        push("num", s.slice(i, e), i, e, v);
+        i = e;
+        if (i + 1 < n) {
+          const x = this.code(i);
+          if ((x === 120 || x === 88 || x === 0x445) && isDigit(this.code(i + 1))) { push("op", "*", i, i + 1); i++; }
+        }
+        continue;
+      }
+      if (isLetter(c)) {
+        let j = i + 1;
+        while (j < n && isIdentCont(this.code(j))) j++;
+        push("ident", s.slice(i, j), i, j);
+        i = j;
+        continue;
+      }
+      const ch = s[i];
+      switch (ch) {
+        case "$": case "€": case "£": case "₴": case "¥": case "₿": case "√": case "℃": case "℉":
+          push("ident", ch, i, i + 1); i++; break;
+        case "(": case "[": push("lparen", "(", i, i + 1); i++; break;
+        case ")": case "]": push("rparen", ")", i, i + 1); i++; break;
+        case ";": case ",": push("sep", ",", i, i + 1); i++; break;
+        case "-": case "−": case "–":
+          if (i + 1 < n && s[i + 1] === ">") { push("op", "->", i, i + 2); i += 2; } else { push("op", "-", i, i + 1); i++; }
+          break;
+        case "*":
+          if (i + 1 < n && s[i + 1] === "*") { push("op", "^", i, i + 2); i += 2; } else { push("op", "*", i, i + 1); i++; }
+          break;
+        case "×": case "·": case "∙": push("op", "*", i, i + 1); i++; break;
+        case "÷": push("op", "/", i, i + 1); i++; break;
+        case "→": push("op", "->", i, i + 1); i++; break;
+        case "+": case "/": case "^": case "%": case "!": case "=": push("op", ch, i, i + 1); i++; break;
+        default: throw new CalcError(tr("unknownChar", ch));
+      }
+    }
+    toks.push({ kind: "eof", text: "", num: 0, start: this.base + n, end: this.base + n, spaceBefore: space });
+    return toks;
+  }
+
+  lexNumber(start) {
+    const s = this.s, n = s.length;
+    let i = start;
+    // 0xFF, 0b1010, 0o17
+    if (s[i] === "0" && i + 2 < n) {
+      const p = s[i + 1].toLowerCase();
+      const radix = p === "x" ? 16 : p === "b" ? 2 : p === "o" ? 8 : 0;
+      if (radix) {
+        let j = i + 2;
+        while (j < n && !isNaN(parseInt(s[j], radix)) && /[0-9a-fA-F]/.test(s[j])) j++;
+        if (j > i + 2) return [parseInt(s.slice(i + 2, j), radix), j];
+      }
+    }
+    const groups = [], seps = [], ends = [];
+    const readDigits = () => { let g = ""; while (i < n && isDigit(this.code(i))) { g += s[i]; i++; } return g; };
+    groups.push(readDigits()); ends.push(i);
+    while (i + 1 < n) {
+      const c = this.code(i);
+      const last = groups[groups.length - 1];
+      if (c === 44 || c === 46 || c === 39) {
+        if (!isDigit(this.code(i + 1))) break;
+        i++; seps.push(c); groups.push(readDigits()); ends.push(i);
+      } else if (c === 32 || c === 0xa0 || c === 0x202f) {
+        const ok = i + 3 < n && isDigit(this.code(i + 1)) && isDigit(this.code(i + 2)) && isDigit(this.code(i + 3)) &&
+          (i + 4 >= n || !isDigit(this.code(i + 4))) && last.length >= 1 && last.length <= 3 &&
+          (!seps.some((x) => x === 44 || x === 46) || seps.every((x) => x === 32));
+        if (!ok) break;
+        i++; seps.push(32); groups.push(readDigits()); ends.push(i);
+      } else break;
+    }
+    let digits = "", chosen = 0;
+    for (let k = groups.length; k >= 1; k--) {
+      const d = this.interpret(groups.slice(0, k), seps.slice(0, k - 1));
+      if (d !== null) { digits = d; chosen = k; break; }
+    }
+    if (!chosen) throw new CalcError(tr("badNumber"));
+    i = ends[chosen - 1];
+    // exponent
+    if (i < n && (s[i] === "e" || s[i] === "E")) {
+      let j = i + 1;
+      if (j < n && (s[j] === "+" || s[j] === "-")) j++;
+      if (j < n && isDigit(this.code(j))) {
+        let k = j;
+        while (k < n && isDigit(this.code(k))) k++;
+        if (k >= n || !isLetter(this.code(k))) { digits += "e" + s.slice(i + 1, k); i = k; }
+      }
+    }
+    const v = Number(digits);
+    if (!isFinite(v) && !/e/.test(digits)) throw new CalcError(tr("badNumber"));
+    return [v, i];
+  }
+
+  interpret(g, seps) {
+    if (!seps.length) return g[0] ? g[0] : null;
+    const punct = seps.map((e, offset) => ({ e, offset })).filter((x) => x.e === 44 || x.e === 46);
+    let decimalIndex = null;
+    const kinds = new Set(punct.map((x) => x.e));
+    if (kinds.size === 2) {
+      const lastP = punct[punct.length - 1];
+      decimalIndex = lastP.offset;
+      if (punct.filter((x) => x.e === lastP.e).length > 1) return null;
+    } else if (punct.length === 1) {
+      const p = punct[0];
+      const after = g[p.offset + 1], before = g[p.offset];
+      const couldGroup = after.length === 3 && before.length >= 1 && before.length <= 3;
+      decimalIndex = (couldGroup && p.e !== this.decimal && p.offset === seps.length - 1) ? null : p.offset;
+    } else if (punct.length > 1) {
+      decimalIndex = null;
+    }
+    if (decimalIndex !== null && decimalIndex !== seps.length - 1) return null;
+    const lastGroupIdx = decimalIndex ?? seps.length;
+    if (lastGroupIdx > 0) {
+      if (!(g[0].length >= 1 && g[0].length <= 3)) return null;
+      for (let k = 1; k <= lastGroupIdx; k++) if (g[k].length !== 3) return null;
+    }
+    let out = g.slice(0, lastGroupIdx + 1).join("");
+    if (decimalIndex !== null) { if (!out) out = "0"; out += "." + g[decimalIndex + 1]; }
+    return out || null;
+  }
+}
+
+// ───────────────────────── Parser ─────────────────────────
+
+const CONV_WORDS = new Set(["in", "to", "as", "into", "в", "во", "у"]);
+const FORMAT_WORDS = { hex: "hex", bin: "bin", binary: "bin", oct: "oct", octal: "oct", sci: "sci", scientific: "sci", dec: "dec", decimal: "dec" };
+const SCALES = {
+  k: 1e3, "тис": 1e3, "тисяч": 1e3, "тисячі": 1e3, "мільйон": 1e6, "мільйонів": 1e6, "мільярд": 1e9, "мільярдів": 1e9,
+  thousand: 1e3, thousands: 1e3, "тыс": 1e3, "тысяча": 1e3, "тысячи": 1e3, "тысяч": 1e3,
+  M: 1e6, mln: 1e6, million: 1e6, millions: 1e6, "млн": 1e6, "миллион": 1e6, "миллиона": 1e6, "миллионов": 1e6,
+  bn: 1e9, billion: 1e9, billions: 1e9, "млрд": 1e9, "миллиард": 1e9, "миллиарда": 1e9, "миллиардов": 1e9,
+};
+const CONSTANTS = { pi: Math.PI, "π": Math.PI, e: Math.E, tau: 2 * Math.PI };
+export const FUNC_ALIASES = {
+  sqrt: "sqrt", "√": "sqrt", "корень": "sqrt", "корінь": "sqrt", cbrt: "cbrt",
+  abs: "abs", "модуль": "abs", round: "round", floor: "floor", ceil: "ceil", trunc: "trunc",
+  sin: "sin", cos: "cos", tan: "tan", tg: "tan",
+  asin: "asin", acos: "acos", atan: "atan", arcsin: "asin", arccos: "acos", arctan: "atan",
+  sinh: "sinh", cosh: "cosh", tanh: "tanh",
+  ln: "ln", log: "log", lg: "log", log10: "log", log2: "log2", exp: "exp",
+  min: "min", max: "max", avg: "avg", average: "avg", sum: "sum", fact: "fact", root: "root",
+};
+const PREFIX_FUNCS = new Set(["sqrt", "cbrt", "abs", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "ln", "log", "log2", "exp", "fact"]);
+const PREV_WORDS = new Set(["prev", "ans", "пред", "попер"]);
+const SUM_WORDS = new Set(["sum", "total", "итого", "сумма", "всего", "разом", "підсумок", "усього", "всього"]);
+const AVG_WORDS = new Set(["avg", "average", "среднее", "середнє"]);
+
+const V = (num, unit = null, isPercent = false, format = "dec") => ({ num, unit, isPercent, format });
+const copy = (v) => ({ ...v });
+
+class Parser {
+  constructor(tokens, reg, ctx) { this.t = tokens; this.i = 0; this.reg = reg; this.ctx = ctx; this.marks = []; }
+  get cur() { return this.t[this.i]; }
+  at(k) { return this.t[Math.min(k, this.t.length - 1)]; }
+  isOp(tok, s) { return tok.kind === "op" && tok.text === s; }
+  mark(a, b, kind) { if (a < this.t.length && b < this.t.length && a <= b) this.marks.push({ start: this.t[a].start, end: this.t[b].end, kind }); }
+  isConvWord(tok) { return (tok.kind === "ident" && CONV_WORDS.has(tok.text.toLowerCase())) || this.isOp(tok, "->"); }
+  startsOperand(tok) {
+    if (tok.kind === "num" || tok.kind === "lparen") return true;
+    if (tok.kind === "ident") return !CONV_WORDS.has(tok.text.toLowerCase());
+    return false;
+  }
+  isImplicitFactor(tok) {
+    if (tok.kind === "lparen") return true;
+    if (tok.kind !== "ident") return false;
+    const low = tok.text.toLowerCase();
+    if (this.ctx.vars.has(tok.text)) return true;
+    if (CONSTANTS[low] !== undefined) return true;
+    if (tok.text === "√") return true;
+    if (FUNC_ALIASES[low] && this.at(this.i + 1).kind === "lparen") return true;
+    return false;
+  }
+  isVarName(s) {
+    const f = s.charCodeAt(0);
+    if (!isLetter(f) || f === 0xb0) return false;
+    return CONSTANTS[s.toLowerCase()] === undefined;
+  }
+  matchUnit(j) {
+    const t = this.t;
+    if (j >= t.length || t[j].kind !== "ident") return null;
+    const cands = [];
+    let acc = "";
+    for (let k = j; k < t.length && k < j + 3; k++) {
+      const tk = t[k];
+      let ok = false;
+      if (k === j) ok = true;
+      else if (tk.kind === "ident") ok = true;
+      else if (tk.kind === "op" && (tk.text === "/" || tk.text === "^")) ok = !tk.spaceBefore;
+      else if (tk.kind === "num") ok = this.isOp(t[k - 1], "^") && !tk.spaceBefore;
+      if (!ok) break;
+      acc += (k > j && tk.spaceBefore ? " " : "") + tk.text;
+      if (tk.kind === "ident" || tk.kind === "num") cands.push([acc, k - j + 1]);
+    }
+    for (let x = cands.length - 1; x >= 0; x--) {
+      const u = this.reg.lookup(cands[x][0]);
+      if (u) return [u, cands[x][1]];
+    }
+    return null;
+  }
+
+  parseLine() {
+    if (this.cur.kind === "eof") return null;
+    if (this.cur.kind === "ident" && this.isOp(this.at(this.i + 1), "=") && this.at(this.i + 2).kind !== "eof" && this.isVarName(this.cur.text)) {
+      const name = this.cur.text;
+      this.mark(this.i, this.i, "variable");
+      this.i += 2;
+      const v = this.parseConversion();
+      this.finish();
+      this.ctx.vars.set(name, v);
+      return v;
+    }
+    const v = this.parseConversion();
+    this.finish();
+    return v;
+  }
+  finish() {
+    if (this.isOp(this.cur, "=")) this.i = this.t.length - 1;
+    if (this.cur.kind !== "eof") throw new CalcError(tr("unclear", this.cur.text));
+  }
+  parseConversion() {
+    let v = this.parseExpr();
+    for (;;) {
+      const tok = this.cur;
+      if (this.isConvWord(tok)) {
+        const j = this.i + 1, nt = this.at(j);
+        if (nt.kind === "ident" && FORMAT_WORDS[nt.text.toLowerCase()]) {
+          this.mark(this.i, j, "keyword");
+          this.i = j + 1;
+          v = copy(v); v.format = FORMAT_WORDS[nt.text.toLowerCase()];
+          continue;
+        }
+        const m = this.matchUnit(j);
+        if (!m) {
+          if (nt.kind === "eof") throw new CalcError(tr("convertTo"));
+          throw new CalcError(tr("unknownUnit", nt.text));
+        }
+        this.mark(this.i, this.i, "keyword");
+        this.mark(j, j + m[1] - 1, "unit");
+        this.i = j + m[1];
+        v = this.convert(v, m[0]);
+        continue;
+      }
+      if (tok.kind === "op" && (tok.text === "+" || tok.text === "-")) {
+        this.i++;
+        v = this.addSub(v, this.parseTerm(), tok.text === "-");
+        continue;
+      }
+      if (tok.kind === "op" && (tok.text === "*" || tok.text === "/")) {
+        this.i++;
+        const r = this.parseUnary();
+        v = tok.text === "*" ? this.mul(v, r) : this.div(v, r);
+        continue;
+      }
+      break;
+    }
+    return v;
+  }
+  parseExpr() {
+    let l = this.parseTerm();
+    while (this.cur.kind === "op" && (this.cur.text === "+" || this.cur.text === "-")) {
+      const sub = this.cur.text === "-";
+      this.i++;
+      l = this.addSub(l, this.parseTerm(), sub);
+    }
+    return l;
+  }
+  parseTerm() {
+    let l = this.parseUnary();
+    for (;;) {
+      const tok = this.cur;
+      if (tok.kind === "op" && (tok.text === "*" || tok.text === "/")) {
+        this.i++;
+        const r = this.parseUnary();
+        l = tok.text === "*" ? this.mul(l, r) : this.div(l, r);
+        continue;
+      }
+      if (tok.kind === "ident") {
+        const low = tok.text.toLowerCase();
+        if ((low === "x" || low === "х") && !this.ctx.vars.has(tok.text) && this.startsOperand(this.at(this.i + 1))) {
+          this.i++; l = this.mul(l, this.parseUnary()); continue;
+        }
+        if (low === "mod") { this.mark(this.i, this.i, "keyword"); this.i++; l = this.modulo(l, this.parseUnary()); continue; }
+        if (l.isPercent && ["of", "от", "від", "off", "on"].includes(low)) {
+          this.mark(this.i, this.i, "keyword");
+          this.i++;
+          const r = this.parseUnary();
+          if (r.isPercent) throw new CalcError(tr("pctOfPct"));
+          const res = copy(r), p = l.num / 100;
+          res.num = low === "off" ? r.num * (1 - p) : low === "on" ? r.num * (1 + p) : r.num * p;
+          l = res;
+          continue;
+        }
+      }
+      break;
+    }
+    return l;
+  }
+  parseUnary() {
+    if (this.isOp(this.cur, "-")) { this.i++; const v = copy(this.parseUnary()); v.num = -v.num; return v; }
+    if (this.isOp(this.cur, "+")) { this.i++; return this.parseUnary(); }
+    return this.parsePower();
+  }
+  parsePower() {
+    const b = this.parsePostfix();
+    if (this.isOp(this.cur, "^")) { this.i++; return this.power(b, this.parseUnary()); }
+    return b;
+  }
+  parsePostfix() {
+    let v = copy(this.parsePrimary());
+    for (;;) {
+      if (this.isOp(this.cur, "!") && !v.isPercent) { this.i++; v.num = factorial(v.num); continue; }
+      if (this.isOp(this.cur, "%") && !v.isPercent) { this.i++; v.isPercent = true; continue; }
+      break;
+    }
+    if (!v.unit && !v.isPercent) {
+      if (this.cur.kind === "ident" && SCALES[this.cur.text] !== undefined) {
+        this.mark(this.i, this.i, "keyword");
+        v.num *= SCALES[this.cur.text];
+        this.i++;
+      }
+      const m = this.matchUnit(this.i);
+      if (m) {
+        const low = this.cur.text.toLowerCase();
+        const isConv = m[1] === 1 && CONV_WORDS.has(low);
+        const next = this.at(this.i + 1);
+        const nextIsTarget = (this.matchUnit(this.i + 1) !== null || FORMAT_WORDS[next.text.toLowerCase()] !== undefined) &&
+          !CONV_WORDS.has(next.text.toLowerCase());
+        if (!(isConv && nextIsTarget)) {
+          this.mark(this.i, this.i + m[1] - 1, "unit");
+          this.i += m[1];
+          v.unit = m[0];
+        }
+      }
+    }
+    if (this.isImplicitFactor(this.cur)) v = this.mul(v, this.parsePostfix());
+    return v;
+  }
+  parsePrimary() {
+    const tok = this.cur;
+    switch (tok.kind) {
+      case "num": this.i++; return V(tok.num);
+      case "lparen": {
+        this.i++;
+        const v = this.parseConversion();
+        if (this.cur.kind === "rparen") this.i++;
+        else if (this.cur.kind !== "eof") throw new CalcError(tr("expectedParen"));
+        return v;
+      }
+      case "ident": return this.parseIdent();
+      case "eof": throw new CalcError(tr("incomplete"));
+      default: throw new CalcError(tr("unexpected", tok.text));
+    }
+  }
+  parseIdent() {
+    const tok = this.cur, name = tok.text, low = name.toLowerCase();
+    if (this.ctx.vars.has(name)) { this.mark(this.i, this.i, "variable"); this.i++; return this.ctx.vars.get(name); }
+    const f = FUNC_ALIASES[low];
+    if (f) {
+      if (this.at(this.i + 1).kind === "lparen") {
+        this.mark(this.i, this.i, "function");
+        this.i += 2;
+        const args = [];
+        if (this.cur.kind === "rparen") this.i++;
+        else for (;;) {
+          args.push(this.parseConversion());
+          if (this.cur.kind === "sep") { this.i++; continue; }
+          if (this.cur.kind === "rparen") { this.i++; break; }
+          if (this.cur.kind === "eof") break;
+          throw new CalcError(tr("expectedParen"));
+        }
+        return this.callFunc(f, args);
+      }
+      if (PREFIX_FUNCS.has(f) && this.startsOperand(this.at(this.i + 1))) {
+        this.mark(this.i, this.i, "function");
+        this.i++;
+        return this.callFunc(f, [this.parsePostfix()]);
+      }
+    }
+    if (CONSTANTS[low] !== undefined) { this.mark(this.i, this.i, "keyword"); this.i++; return V(CONSTANTS[low]); }
+    if (PREV_WORDS.has(low)) {
+      this.mark(this.i, this.i, "keyword"); this.i++;
+      if (!this.ctx.prev) throw new CalcError(tr("noPrev"));
+      return this.ctx.prev;
+    }
+    if (SUM_WORDS.has(low)) { this.mark(this.i, this.i, "keyword"); this.i++; return this.blockAggregate()[0]; }
+    if (AVG_WORDS.has(low)) {
+      this.mark(this.i, this.i, "keyword"); this.i++;
+      const [s, n] = this.blockAggregate();
+      const r = copy(s); r.num = n > 0 ? s.num / n : 0; return r;
+    }
+    const m = this.matchUnit(this.i);
+    if (m) {
+      this.mark(this.i, this.i + m[1] - 1, "unit");
+      this.i += m[1];
+      if (m[0].dim === "currency" && (this.cur.kind === "num" || this.cur.kind === "lparen")) {
+        const v = copy(this.parsePostfix());
+        if (v.isPercent) throw new CalcError(tr("curPct"));
+        if (v.unit) v.num = this.reg.convert(v.num, v.unit, m[0]);
+        v.unit = m[0];
+        return v;
+      }
+      return V(1, m[0]);
+    }
+    throw new CalcError(tr("unknown", name));
+  }
+  blockAggregate() {
+    let acc = null, n = 0;
+    for (const v of this.ctx.block) {
+      if (v.isPercent) continue;
+      if (acc) { try { acc = this.addSub(acc, v, false); n++; } catch { /* skip */ } }
+      else { acc = v; n = 1; }
+    }
+    return [acc || V(0), n];
+  }
+
+  convert(v, u) {
+    if (v.isPercent) throw new CalcError(tr("pctConvert", u.id));
+    const r = copy(v);
+    r.format = "dec";
+    if (v.unit) r.num = this.reg.convert(v.num, v.unit, u);
+    r.unit = u;
+    return r;
+  }
+  addSub(a, b, sub) {
+    const sign = sub ? -1 : 1;
+    if (b.isPercent && !a.isPercent) { const r = copy(a); r.num = a.num * (1 + (sign * b.num) / 100); return r; }
+    if (a.isPercent !== b.isPercent) throw new CalcError(tr("pctAdd"));
+    const r = copy(a);
+    if (a.unit && b.unit) r.num = a.num + sign * this.reg.convert(b.num, b.unit, a.unit);
+    else if (!a.unit && b.unit) { r.num = a.num + sign * b.num; r.unit = b.unit; }
+    else r.num = a.num + sign * b.num;
+    return r;
+  }
+  mul(a, b) {
+    if (a.isPercent && b.isPercent) return V((a.num * b.num) / 100, null, true);
+    if (b.isPercent) { const r = copy(a); r.num = (a.num * b.num) / 100; return r; }
+    if (a.isPercent) { const r = copy(b); r.num = (b.num * a.num) / 100; return r; }
+    if (a.unit && b.unit) {
+      if (a.unit.dim === "length" && b.unit.dim === "length") {
+        const bv = this.reg.convert(b.num, b.unit, a.unit);
+        const area = this.reg.lookup(a.unit.id + "²");
+        if (area) return V(a.num * bv, area);
+      }
+      throw new CalcError(tr("mulUnits", a.unit.id, b.unit.id));
+    }
+    if (!a.unit && b.unit) return V(a.num * b.num, b.unit);
+    const r = copy(a); r.num = a.num * b.num; return r;
+  }
+  div(a, b) {
+    if (b.num === 0) throw new CalcError(tr("divZero"));
+    if (a.isPercent && b.isPercent) return V(a.num / b.num);
+    if (b.isPercent) { const r = copy(a); r.num = a.num / (b.num / 100); return r; }
+    if (a.isPercent) return V(a.num / b.num, null, true);
+    if (a.unit && b.unit) {
+      const ua = a.unit, ub = b.unit;
+      if (ua.dim === ub.dim) {
+        const bv = this.reg.convert(b.num, ub, ua);
+        if (bv === 0) throw new CalcError(tr("divZero"));
+        return V(a.num / bv);
+      }
+      if (ua.dim === "length" && ub.dim === "time") {
+        const mps = (a.num * ua.factor) / (b.num * ub.factor);
+        let target = "m/s";
+        if (ub.id === "h" && ua.id === "km") target = "km/h";
+        if (ub.id === "h" && ua.id === "mi") target = "mph";
+        const ms = this.reg.lookup("m/s"), tu = this.reg.lookup(target);
+        if (ms && tu) return V(this.reg.convert(mps, ms, tu), tu);
+      }
+      throw new CalcError(tr("divUnits", ua.id, ub.id));
+    }
+    if (!a.unit && b.unit) throw new CalcError(tr("divNumUnit", b.unit.id));
+    const r = copy(a); r.num = a.num / b.num; return r;
+  }
+  modulo(a, b) {
+    let bv = b.num;
+    if (a.unit && b.unit) bv = this.reg.convert(b.num, b.unit, a.unit);
+    if (bv === 0) throw new CalcError(tr("divZero"));
+    const r = copy(a); r.num = a.num % bv; return r;
+  }
+  power(b, e) {
+    if (e.unit || e.isPercent) throw new CalcError(tr("powNum"));
+    if (b.unit) {
+      if (b.unit.dim === "length" && (e.num === 2 || e.num === 3)) {
+        const nu = this.reg.lookup(b.unit.id + (e.num === 2 ? "²" : "³"));
+        if (nu) return V(Math.pow(b.num, e.num), nu);
+      }
+      throw new CalcError(tr("powUnit", b.unit.id));
+    }
+    const r = Math.pow(b.num, e.num);
+    if (Number.isNaN(r)) throw new CalcError(tr("noReal"));
+    return V(r);
+  }
+  callFunc(f, args) {
+    const one = () => { if (args.length !== 1) throw new CalcError(tr("oneArg", f)); return args[0]; };
+    const plain = (v) => { if (v.unit) throw new CalcError(tr("plainArg", f)); return v.isPercent ? v.num / 100 : v.num; };
+    const radians = (v) => {
+      if (v.unit) { if (v.unit.dim !== "angle") throw new CalcError(tr("angleArg", f)); return v.num * v.unit.factor; }
+      return v.num;
+    };
+    const logPos = (x) => { if (!(x > 0)) throw new CalcError(tr("logPos")); return x; };
+    switch (f) {
+      case "sqrt": { const x = plain(one()); if (x < 0) throw new CalcError(tr("sqrtNeg")); return V(Math.sqrt(x)); }
+      case "cbrt": return V(Math.cbrt(plain(one())));
+      case "root": {
+        if (args.length !== 2) throw new CalcError(tr("rootUsage"));
+        const x = plain(args[0]), n = plain(args[1]);
+        if (n === 0) throw new CalcError(tr("rootZero"));
+        return V(Math.pow(x, 1 / n));
+      }
+      case "abs": case "round": case "floor": case "ceil": case "trunc": {
+        if (args.length < 1 || args.length > 2) throw new CalcError(tr("oneTwoArgs", f));
+        const v = copy(args[0]);
+        const m = Math.pow(10, args.length === 2 ? plain(args[1]) : 0);
+        const x = v.num * m;
+        if (f === "abs") v.num = Math.abs(v.num);
+        else if (f === "round") v.num = (x < 0 ? -Math.round(-x) : Math.round(x)) / m;
+        else if (f === "floor") v.num = Math.floor(x) / m;
+        else if (f === "ceil") v.num = Math.ceil(x) / m;
+        else v.num = Math.trunc(x) / m;
+        return v;
+      }
+      case "sin": return V(Math.sin(radians(one())));
+      case "cos": return V(Math.cos(radians(one())));
+      case "tan": return V(Math.tan(radians(one())));
+      case "asin": return V(Math.asin(plain(one())));
+      case "acos": return V(Math.acos(plain(one())));
+      case "atan": return V(Math.atan(plain(one())));
+      case "sinh": return V(Math.sinh(plain(one())));
+      case "cosh": return V(Math.cosh(plain(one())));
+      case "tanh": return V(Math.tanh(plain(one())));
+      case "ln": return V(Math.log(logPos(plain(one()))));
+      case "log": {
+        if (args.length < 1 || args.length > 2) throw new CalcError(tr("logUsage"));
+        const x = logPos(plain(args[0]));
+        if (args.length === 2) {
+          const b = plain(args[1]);
+          if (!(b > 0) || b === 1) throw new CalcError(tr("badBase"));
+          return V(Math.log(x) / Math.log(b));
+        }
+        return V(Math.log10(x));
+      }
+      case "log2": return V(Math.log2(logPos(plain(one()))));
+      case "exp": return V(Math.exp(plain(one())));
+      case "fact": return V(factorial(plain(one())));
+      case "min": case "max": case "avg": case "sum": {
+        if (!args.length) throw new CalcError(tr("needArgs", f));
+        const first = args[0];
+        const vals = args.map((a) => (first.unit && a.unit ? this.reg.convert(a.num, a.unit, first.unit) : a.num));
+        const r = copy(first);
+        if (f === "min") r.num = Math.min(...vals);
+        else if (f === "max") r.num = Math.max(...vals);
+        else { const s = vals.reduce((x, y) => x + y, 0); r.num = f === "sum" ? s : s / vals.length; }
+        return r;
+      }
+      default: throw new CalcError(tr("unknownFunc", f));
+    }
+  }
+}
+
+function factorial(x) {
+  if (!(x >= 0) || x !== Math.round(x) || x > 170) throw new CalcError(tr("factorial"));
+  let r = 1;
+  for (let k = 2; k <= x; k++) r *= k;
+  return r;
+}
+
+// ───────────────────────── Engine ─────────────────────────
+
+export function defaultSettings() {
+  return { decimalSeparator: ".", groupingSeparator: ",", decimals: 2, trimZeros: true };
+}
+
+export class Engine {
+  constructor(rates) {
+    this.rates = rates;
+    this.registry = new UnitRegistry(rates);
+    this.settings = defaultSettings();
+    this.lastVariables = [];
+  }
+
+  evaluate(lines, recordVariables = false) {
+    const ctx = { vars: new Map(), prev: null, block: [] };
+    const res = lines.map((l) => this.evalLine(l, ctx));
+    if (recordVariables) this.lastVariables = [...ctx.vars.keys()];
+    return res;
+  }
+  evaluateOne(expr) { return this.evaluate([expr])[0]; }
+
+  evalLine(line, ctx) {
+    const res = { value: null, display: null, error: null, highlights: [] };
+    const n = line.length;
+    let start = 0;
+    while (start < n && (line[start] === " " || line[start] === "\t")) start++;
+    if (start === n) { ctx.block = []; return res; }
+    if (line[start] === "#" || line.startsWith("//", start)) {
+      res.highlights.push({ start, end: n, kind: "comment" });
+      ctx.block = [];
+      return res;
+    }
+    let end = n;
+    const ci = line.indexOf("//", start);
+    if (ci >= 0) { end = ci; res.highlights.push({ start: ci, end: n, kind: "comment" }); }
+    const colon = line.indexOf(":", start);
+    if (colon >= 0 && colon < end) {
+      const pre = line.slice(start, colon);
+      const hasLetter = [...pre].some((ch) => isLetter(ch.charCodeAt(0)));
+      if (hasLetter && !/[=(]/.test(pre)) {
+        res.highlights.push({ start, end: colon + 1, kind: "label" });
+        start = colon + 1;
+      }
+    }
+    const body = line.slice(start, end);
+    let parser = null;
+    try {
+      const toks = new Lexer(body, start, this.settings).tokenize();
+      for (const t of toks) if (t.kind === "num") res.highlights.push({ start: t.start, end: t.end, kind: "number" });
+      parser = new Parser(toks, this.registry, ctx);
+      const v = parser.parseLine();
+      if (v) {
+        res.value = v;
+        res.display = this.format(v);
+        ctx.prev = v;
+        ctx.block.push(v);
+      }
+      res.highlights.push(...parser.marks);
+    } catch (e) {
+      res.value = null; res.display = null;
+      res.error = e instanceof CalcError ? e.message : String(e && e.message || e);
+      if (parser) res.highlights.push(...parser.marks);
+    }
+    return res;
+  }
+
+  format(v) {
+    if (!isFinite(v.num)) throw new CalcError(Number.isNaN(v.num) ? tr("noResult") : tr("tooBig"));
+    const suffix = v.unit ? (v.unit.id === "°" ? "°" : " " + v.unit.id) : "";
+    if (v.format === "hex" || v.format === "bin" || v.format === "oct") {
+      if (v.num !== Math.round(v.num) || Math.abs(v.num) >= 9e15) throw new CalcError(tr("intOnly"));
+      const radix = v.format === "hex" ? 16 : v.format === "bin" ? 2 : 8;
+      const prefix = v.format === "hex" ? "0x" : v.format === "bin" ? "0b" : "0o";
+      return (v.num < 0 ? "-" : "") + prefix + Math.abs(v.num).toString(radix).toUpperCase() + suffix;
+    }
+    if (v.format === "sci") return this.sci(v.num, Math.max(this.settings.decimals, 3)) + suffix;
+    const dec = v.unit && v.unit.isCrypto ? Math.max(this.settings.decimals, 8) : this.settings.decimals;
+    let s = this.number(v.num, dec);
+    if (v.isPercent) s += "%";
+    return s + suffix;
+  }
+
+  get groupSep() {
+    const g = this.settings.groupingSeparator;
+    if (g === this.settings.decimalSeparator) return this.settings.decimalSeparator === "," ? " " : ",";
+    return g;
+  }
+
+  number(x, decimals) {
+    if (!isFinite(x)) return Number.isNaN(x) ? "—" : x > 0 ? "∞" : "-∞";
+    const ax = Math.abs(x);
+    if (ax >= 1e15) return this.sci(x, 6);
+    let d = Math.max(0, Math.min(decimals, 12));
+    let trim = this.settings.trimZeros;
+    if (ax !== 0 && ax < Math.pow(10, -d) / 2) {
+      if (ax < 1e-9) return this.sci(x, 4);
+      d = Math.floor(-Math.log10(ax)) + 4;
+      trim = true;
+    }
+    const s = ax.toFixed(d);
+    let [intPart, frac = ""] = s.split(".");
+    if (trim) frac = frac.replace(/0+$/, "");
+    const g = this.groupSep;
+    if (g && intPart.length > 3) intPart = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, g);
+    let res = intPart + (frac ? this.settings.decimalSeparator + frac : "");
+    if (x < 0 && Number(s) !== 0) res = "-" + res;
+    return res;
+  }
+
+  sci(x, digits) {
+    let [mant, exp] = x.toExponential(digits).split("e");
+    if (mant.includes(".")) mant = mant.replace(/0+$/, "").replace(/\.$/, "");
+    return mant.replace(".", this.settings.decimalSeparator) + "e" + Number(exp);
+  }
+
+  completions(prefix) {
+    const p = prefix.toLowerCase();
+    if (!p) return [];
+    const words = new Set([...this.registry.completionWords, ...Object.keys(FUNC_ALIASES),
+      "in", "to", "sum", "prev", "avg", "hex", "bin", "oct", "sci", "pi", "mod", "of", "off", "итого", "разом", ...this.lastVariables]);
+    return [...words].filter((w) => w.toLowerCase().startsWith(p) && w.length > prefix.length)
+      .sort((a, b) => a.length - b.length || a.localeCompare(b));
+  }
+}
