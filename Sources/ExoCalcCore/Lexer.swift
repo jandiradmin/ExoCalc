@@ -65,7 +65,13 @@ struct Lexer {
                 i += 1
                 continue
             }
-            if Lexer.isDigit(c) || (c == decimal && i + 1 < n && Lexer.isDigit(s[i + 1])) {
+            // ",99" / ".99" at the start of an operand means 0.99
+            let prevAllowsLeadingSep: Bool = {
+                guard let p = toks.last else { return true }
+                return p.kind == .op || p.kind == .lparen || p.kind == .sep
+            }()
+            let leadingSep = (c == 44 || c == 46) && i + 1 < n && Lexer.isDigit(s[i + 1]) && prevAllowsLeadingSep
+            if Lexer.isDigit(c) || leadingSep {
                 let (v, e) = try lexNumber(i)
                 push(.num, str(i, e), i, e, num: v)
                 i = e
