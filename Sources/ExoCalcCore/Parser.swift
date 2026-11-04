@@ -14,7 +14,7 @@ final class Parser {
     private let ctx: Context
     var marks: [Highlight] = []
 
-    static let convWords: Set<String> = ["in", "to", "as", "into", "в", "во"]
+    static let convWords: Set<String> = ["in", "to", "as", "into", "в", "во", "у"]
 
     static let formatWords: [String: NumFormat] = [
         "hex": .hex, "bin": .bin, "binary": .bin, "oct": .oct, "octal": .oct,
@@ -22,7 +22,7 @@ final class Parser {
     ]
 
     static let scales: [String: Double] = [
-        "k": 1e3, "thousand": 1e3, "thousands": 1e3, "тыс": 1e3, "тысяча": 1e3, "тысячи": 1e3, "тысяч": 1e3,
+        "k": 1e3, "тис": 1e3, "тисяч": 1e3, "тисячі": 1e3, "мільйон": 1e6, "мільйонів": 1e6, "мільярд": 1e9, "мільярдів": 1e9, "thousand": 1e3, "thousands": 1e3, "тыс": 1e3, "тысяча": 1e3, "тысячи": 1e3, "тысяч": 1e3,
         "M": 1e6, "mln": 1e6, "million": 1e6, "millions": 1e6, "млн": 1e6, "миллион": 1e6, "миллиона": 1e6, "миллионов": 1e6,
         "bn": 1e9, "billion": 1e9, "billions": 1e9, "млрд": 1e9, "миллиард": 1e9, "миллиарда": 1e9, "миллиардов": 1e9,
     ]
@@ -32,7 +32,7 @@ final class Parser {
     ]
 
     static let funcAliases: [String: String] = [
-        "sqrt": "sqrt", "√": "sqrt", "корень": "sqrt", "cbrt": "cbrt",
+        "sqrt": "sqrt", "√": "sqrt", "корень": "sqrt", "корінь": "sqrt", "cbrt": "cbrt",
         "abs": "abs", "модуль": "abs", "round": "round", "floor": "floor", "ceil": "ceil", "trunc": "trunc",
         "sin": "sin", "cos": "cos", "tan": "tan", "tg": "tan",
         "asin": "asin", "acos": "acos", "atan": "atan", "arcsin": "asin", "arccos": "acos", "arctan": "atan",
@@ -48,9 +48,9 @@ final class Parser {
         "sinh", "cosh", "tanh", "ln", "log", "log2", "exp", "fact",
     ]
 
-    static let prevWords: Set<String> = ["prev", "ans", "пред"]
-    static let sumWords: Set<String> = ["sum", "total", "итого", "сумма", "всего"]
-    static let avgWords: Set<String> = ["avg", "average", "среднее"]
+    static let prevWords: Set<String> = ["prev", "ans", "пред", "попер"]
+    static let sumWords: Set<String> = ["sum", "total", "итого", "сумма", "всего", "разом", "підсумок", "усього", "всього"]
+    static let avgWords: Set<String> = ["avg", "average", "среднее", "середнє"]
 
     init(_ tokens: [Token], reg: UnitRegistry, ctx: Context) {
         t = tokens
@@ -146,7 +146,7 @@ final class Parser {
     private func finish() throws {
         // "14/105=0.1333" — everything after "=" is the user's own note.
         if isOp(cur, "=") { i = t.count - 1 }
-        guard cur.kind == .eof else { throw CalcError("непонятно: «\(cur.text)»") }
+        guard cur.kind == .eof else { throw CalcError(tr("unclear", cur.text)) }
     }
 
     private func parseConversion() throws -> Value {
@@ -163,8 +163,8 @@ final class Parser {
                     continue
                 }
                 guard let m = matchUnit(at: j) else {
-                    if nt.kind == .eof { throw CalcError("во что перевести?") }
-                    throw CalcError("неизвестная единица «\(nt.text)»")
+                    if nt.kind == .eof { throw CalcError(tr("convertTo")) }
+                    throw CalcError(tr("unknownUnit", nt.text))
                 }
                 mark(i, i, .keyword)
                 mark(j, j + m.1 - 1, .unit)
@@ -226,11 +226,11 @@ final class Parser {
                     l = try modulo(l, r)
                     continue
                 }
-                if l.isPercent && (low == "of" || low == "от" || low == "off" || low == "on") {
+                if l.isPercent && (low == "of" || low == "от" || low == "від" || low == "off" || low == "on") {
                     mark(i, i, .keyword)
                     i += 1
                     let r = try parseUnary()
-                    if r.isPercent { throw CalcError("процент от процента") }
+                    if r.isPercent { throw CalcError(tr("pctOfPct")) }
                     var res = r
                     let p = l.num / 100
                     switch low {
@@ -325,15 +325,15 @@ final class Parser {
             if cur.kind == .rparen {
                 i += 1
             } else if cur.kind != .eof {
-                throw CalcError("ожидалась «)»")
+                throw CalcError(tr("expectedParen"))
             }
             return v
         case .ident:
             return try parseIdent()
         case .eof:
-            throw CalcError("выражение не закончено")
+            throw CalcError(tr("incomplete"))
         default:
-            throw CalcError("неожиданное «\(tok.text)»")
+            throw CalcError(tr("unexpected", tok.text))
         }
     }
 
@@ -362,7 +362,7 @@ final class Parser {
                         if cur.kind == .sep { i += 1; continue }
                         if cur.kind == .rparen { i += 1; break }
                         if cur.kind == .eof { break }
-                        throw CalcError("ожидалась «)»")
+                        throw CalcError(tr("expectedParen"))
                     }
                 }
                 return try callFunc(f, args)
@@ -384,7 +384,7 @@ final class Parser {
         if Parser.prevWords.contains(low) {
             mark(i, i, .keyword)
             i += 1
-            guard let p = ctx.prev else { throw CalcError("нет предыдущего результата") }
+            guard let p = ctx.prev else { throw CalcError(tr("noPrev")) }
             return p
         }
         if Parser.sumWords.contains(low) {
@@ -407,7 +407,7 @@ final class Parser {
             // "$20", "usd 20", "€ 15"
             if m.0.dim == .currency && (cur.kind == .num || cur.kind == .lparen) {
                 var v = try parsePostfix()
-                if v.isPercent { throw CalcError("валюта и процент вместе") }
+                if v.isPercent { throw CalcError(tr("curPct")) }
                 if let u = v.unit { v.num = try reg.convert(v.num, u, m.0) }
                 v.unit = m.0
                 return v
@@ -415,7 +415,7 @@ final class Parser {
             return Value(1, unit: m.0)
         }
 
-        throw CalcError("неизвестно: «\(name)»")
+        throw CalcError(tr("unknown", name))
     }
 
     private func blockAggregate() -> (Value, Int) {
@@ -435,7 +435,7 @@ final class Parser {
     // MARK: - Arithmetic
 
     private func convert(_ v: Value, to u: CalcUnit) throws -> Value {
-        if v.isPercent { throw CalcError("процент нельзя перевести в \(u.id)") }
+        if v.isPercent { throw CalcError(tr("pctConvert", u.id)) }
         var r = v
         r.format = .dec
         if let from = v.unit {
@@ -452,7 +452,7 @@ final class Parser {
             r.num = a.num * (1 + sign * b.num / 100)
             return r
         }
-        if a.isPercent != b.isPercent { throw CalcError("нельзя сложить процент и число") }
+        if a.isPercent != b.isPercent { throw CalcError(tr("pctAdd")) }
         var r = a
         switch (a.unit, b.unit) {
         case (.some(let ua), .some(let ub)):
@@ -477,7 +477,7 @@ final class Parser {
                 let bv = try reg.convert(b.num, ub, ua)
                 if let area = reg.lookup(ua.id + "²") { return Value(a.num * bv, unit: area) }
             }
-            throw CalcError("нельзя перемножить \(ua.id) и \(ub.id)")
+            throw CalcError(tr("mulUnits", ua.id, ub.id))
         case (nil, .some(let ub)):
             return Value(a.num * b.num, unit: ub)
         default:
@@ -488,7 +488,7 @@ final class Parser {
     }
 
     private func div(_ a: Value, _ b: Value) throws -> Value {
-        if b.num == 0 { throw CalcError("деление на ноль") }
+        if b.num == 0 { throw CalcError(tr("divZero")) }
         if a.isPercent && b.isPercent { return Value(a.num / b.num) }
         if b.isPercent { var r = a; r.num = a.num / (b.num / 100); return r }
         if a.isPercent { return Value(a.num / b.num, percent: true) }
@@ -496,7 +496,7 @@ final class Parser {
         case (.some(let ua), .some(let ub)):
             if ua.dim == ub.dim {
                 let bv = try reg.convert(b.num, ub, ua)
-                if bv == 0 { throw CalcError("деление на ноль") }
+                if bv == 0 { throw CalcError(tr("divZero")) }
                 return Value(a.num / bv)
             }
             if ua.dim == .length && ub.dim == .time {
@@ -507,57 +507,57 @@ final class Parser {
                 guard let ms = reg.lookup("m/s"), let tu = reg.lookup(target) else { break }
                 return Value(try reg.convert(mps, ms, tu), unit: tu)
             }
-            throw CalcError("нельзя разделить \(ua.id) на \(ub.id)")
+            throw CalcError(tr("divUnits", ua.id, ub.id))
         case (nil, .some(let ub)):
-            throw CalcError("нельзя разделить число на \(ub.id)")
+            throw CalcError(tr("divNumUnit", ub.id))
         default:
             var r = a
             r.num = a.num / b.num
             return r
         }
-        throw CalcError("нельзя разделить")
+        throw CalcError(tr("divGeneric"))
     }
 
     private func modulo(_ a: Value, _ b: Value) throws -> Value {
         var bv = b.num
         if let ua = a.unit, let ub = b.unit { bv = try reg.convert(b.num, ub, ua) }
-        if bv == 0 { throw CalcError("деление на ноль") }
+        if bv == 0 { throw CalcError(tr("divZero")) }
         var r = a
         r.num = fmod(a.num, bv)
         return r
     }
 
     private func power(_ b: Value, _ e: Value) throws -> Value {
-        if e.unit != nil || e.isPercent { throw CalcError("степень должна быть числом") }
+        if e.unit != nil || e.isPercent { throw CalcError(tr("powNum")) }
         if let u = b.unit {
             if u.dim == .length && (e.num == 2 || e.num == 3) {
                 let suffix = e.num == 2 ? "²" : "³"
                 if let nu = reg.lookup(u.id + suffix) { return Value(pow(b.num, e.num), unit: nu) }
             }
-            throw CalcError("нельзя возвести \(u.id) в степень")
+            throw CalcError(tr("powUnit", u.id))
         }
         let r = pow(b.num, e.num)
-        if r.isNaN { throw CalcError("нет действительного результата") }
+        if r.isNaN { throw CalcError(tr("noReal")) }
         return Value(r)
     }
 
     private func factorial(_ x: Double) throws -> Double {
-        guard x >= 0, x == x.rounded(), x <= 170 else { throw CalcError("факториал — только целые 0…170") }
+        guard x >= 0, x == x.rounded(), x <= 170 else { throw CalcError(tr("factorial")) }
         return tgamma(x + 1).rounded()
     }
 
     private func callFunc(_ f: String, _ args: [Value]) throws -> Value {
         func one() throws -> Value {
-            guard args.count == 1 else { throw CalcError("\(f): нужен один аргумент") }
+            guard args.count == 1 else { throw CalcError(tr("oneArg", f)) }
             return args[0]
         }
         func plain(_ v: Value) throws -> Double {
-            if v.unit != nil { throw CalcError("\(f): нужно число без единиц") }
+            if v.unit != nil { throw CalcError(tr("plainArg", f)) }
             return v.isPercent ? v.num / 100 : v.num
         }
         func radians(_ v: Value) throws -> Double {
             if let u = v.unit {
-                guard u.dim == .angle else { throw CalcError("\(f): нужен угол") }
+                guard u.dim == .angle else { throw CalcError(tr("angleArg", f)) }
                 return v.num * u.factor
             }
             return v.num
@@ -566,19 +566,19 @@ final class Parser {
         switch f {
         case "sqrt":
             let x = try plain(try one())
-            guard x >= 0 else { throw CalcError("корень из отрицательного числа") }
+            guard x >= 0 else { throw CalcError(tr("sqrtNeg")) }
             return Value(x.squareRoot())
         case "cbrt":
             let x = try plain(try one())
             return Value(cbrt(x))
         case "root":
-            guard args.count == 2 else { throw CalcError("root(x; n)") }
+            guard args.count == 2 else { throw CalcError(tr("rootUsage")) }
             let x = try plain(args[0])
             let n = try plain(args[1])
-            guard n != 0 else { throw CalcError("корень нулевой степени") }
+            guard n != 0 else { throw CalcError(tr("rootZero")) }
             return Value(pow(x, 1 / n))
         case "abs", "round", "floor", "ceil", "trunc":
-            guard args.count == 1 || args.count == 2 else { throw CalcError("\(f): 1 или 2 аргумента") }
+            guard args.count == 1 || args.count == 2 else { throw CalcError(tr("oneTwoArgs", f)) }
             var v = args[0]
             var digits = 0.0
             if args.count == 2 { digits = try plain(args[1]) }
@@ -602,21 +602,21 @@ final class Parser {
         case "tanh": return Value(tanh(try plain(try one())))
         case "ln":
             let x = try plain(try one())
-            guard x > 0 else { throw CalcError("логарифм только для x > 0") }
+            guard x > 0 else { throw CalcError(tr("logPos")) }
             return Value(log(x))
         case "log":
-            guard args.count == 1 || args.count == 2 else { throw CalcError("log(x) или log(x; основание)") }
+            guard args.count == 1 || args.count == 2 else { throw CalcError(tr("logUsage")) }
             let x = try plain(args[0])
-            guard x > 0 else { throw CalcError("логарифм только для x > 0") }
+            guard x > 0 else { throw CalcError(tr("logPos")) }
             if args.count == 2 {
                 let b = try plain(args[1])
-                guard b > 0 && b != 1 else { throw CalcError("неверное основание") }
+                guard b > 0 && b != 1 else { throw CalcError(tr("badBase")) }
                 return Value(log(x) / log(b))
             }
             return Value(log10(x))
         case "log2":
             let x = try plain(try one())
-            guard x > 0 else { throw CalcError("логарифм только для x > 0") }
+            guard x > 0 else { throw CalcError(tr("logPos")) }
             return Value(log2(x))
         case "exp":
             return Value(exp(try plain(try one())))
@@ -624,7 +624,7 @@ final class Parser {
             let x = try plain(try one())
             return Value(try factorial(x))
         case "min", "max", "avg", "sum":
-            guard let first = args.first else { throw CalcError("\(f): нужны аргументы") }
+            guard let first = args.first else { throw CalcError(tr("needArgs", f)) }
             var vals: [Double] = []
             for a in args {
                 if let ua = first.unit, let ub = a.unit {
@@ -642,7 +642,7 @@ final class Parser {
             }
             return r
         default:
-            throw CalcError("неизвестная функция \(f)")
+            throw CalcError(tr("unknownFunc", f))
         }
     }
 }

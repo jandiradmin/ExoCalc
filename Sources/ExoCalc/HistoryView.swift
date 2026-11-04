@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ExoCalcCore
 
 struct HistoryView: View {
     @ObservedObject private var history: History
@@ -19,9 +20,9 @@ struct HistoryView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                TextField("Поиск по истории", text: $ui.query)
+                TextField(tr("searchHistory"), text: $ui.query)
                     .textFieldStyle(.roundedBorder)
-                Button("Очистить всё") { history.clear() }
+                Button(tr("clearAll")) { history.clear() }
                     .disabled(history.entries.isEmpty)
             }
             .padding(10)
@@ -45,22 +46,22 @@ struct HistoryView: View {
                 }
             }
             .contextMenu(forSelectionType: UUID.self) { ids in
-                Button("Вставить в лист") { insert(ids) }
-                Button("Копировать «выражение = результат»") { copy(ids) }
+                Button(tr("insertToSheet")) { insert(ids) }
+                Button(tr("copyExprResult")) { copy(ids) }
                 Divider()
-                Button("Удалить") { history.remove(ids: ids) }
+                Button(tr("delete")) { history.remove(ids: ids) }
             } primaryAction: { ids in
                 insert(ids)
             }
 
             HStack {
-                Text("Записей: \(filtered.count) · двойной клик — вставить в лист")
+                Text(tr("historyCount", String(filtered.count)))
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
-                Button("Копировать") { copy(ui.selection) }
+                Button(tr("copy")) { copy(ui.selection) }
                     .disabled(ui.selection.isEmpty)
-                Button("Вставить в лист") { insert(ui.selection) }
+                Button(tr("insertToSheet")) { insert(ui.selection) }
                     .disabled(ui.selection.isEmpty)
                     .keyboardShortcut(.defaultAction)
             }

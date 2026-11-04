@@ -114,7 +114,7 @@ struct Lexer {
             case "+", "/", "^", "%", "!", "=":
                 push(.op, String(ch), i, i + 1); i += 1
             default:
-                throw CalcError("неизвестный символ «\(ch)»")
+                throw CalcError(tr("unknownChar", String(ch)))
             }
         }
         toks.append(Token(kind: .eof, text: "", start: base + n, end: base + n, spaceBefore: space))
@@ -153,36 +153,54 @@ struct Lexer {
             }
         }
 
-        var digits = ""
-        var intLen = 0
-        while i < n && Lexer.isDigit(s[i]) {
-            digits.append(ascii(s[i]))
-            i += 1
-            intLen += 1
+        // Collect digit groups and the separators between them.
+        // Understands 300,000.00 · 300 000,00 · 30000,00 · 1.234.567 · 1'000 regardless of settings.
+        var groupsArr: [String] = []
+        var seps: [UInt16] = []
+        var ends: [Int] = []          // end index after each group
+        func readDigits() -> String {
+            var g = ""
+            while i < n && Lexer.isDigit(s[i]) { g.append(ascii(s[i])); i += 1 }
+            return g
         }
-
-        // Thousands groups: 19,480 / 1 000 000 / 1.000.000
-        var grouped = false
-        while i + 3 < n,
-              groups.contains(s[i]),
-              Lexer.isDigit(s[i + 1]), Lexer.isDigit(s[i + 2]), Lexer.isDigit(s[i + 3]),
-              i + 4 >= n || !Lexer.isDigit(s[i + 4]),
-              grouped || (intLen >= 1 && intLen <= 3) {
-            for k in 1...3 { digits.append(ascii(s[i + k])) }
-            i += 4
-            grouped = true
-        }
-
-        // Fraction
-        if i + 1 < n, Lexer.isDigit(s[i + 1]), s[i] == decimal || (decimal == 44 && s[i] == 46 && !grouped) {
-            if digits.isEmpty { digits = "0" }
-            digits.append(".")
-            i += 1
-            while i < n && Lexer.isDigit(s[i]) {
-                digits.append(ascii(s[i]))
+        groupsArr.append(readDigits())
+        ends.append(i)
+        while i + 1 < n {
+            let c = s[i]
+            let last = groupsArr[groupsArr.count - 1]
+            if c == 44 || c == 46 || c == 39 {                      // , . '
+                guard Lexer.isDigit(s[i + 1]) else { break }
                 i += 1
+                seps.append(c)
+                groupsArr.append(readDigits())
+                ends.append(i)
+            } else if c == 32 || c == 0xA0 || c == 0x202F {          // space grouping: "300 000"
+                guard i + 3 < n,
+                      Lexer.isDigit(s[i + 1]), Lexer.isDigit(s[i + 2]), Lexer.isDigit(s[i + 3]),
+                      i + 4 >= n || !Lexer.isDigit(s[i + 4]),
+                      last.count >= 1 && last.count <= 3,
+                      !seps.contains(where: { $0 == 44 || $0 == 46 }) || seps.allSatisfy({ $0 == 32 }) else { break }
+                i += 1
+                seps.append(32)
+                groupsArr.append(readDigits())
+                ends.append(i)
+            } else {
+                break
             }
         }
+
+        // Interpret the longest valid prefix.
+        var digits = ""
+        var chosen = 0
+        for k in stride(from: groupsArr.count, through: 1, by: -1) {
+            if let d = interpretNumber(Array(groupsArr[0..<k]), Array(seps[0..<(k - 1)])) {
+                digits = d
+                chosen = k
+                break
+            }
+        }
+        guard chosen > 0 else { throw CalcError(tr("badNumber")) }
+        i = ends[chosen - 1]
 
         // Exponent: 1e6, 2.5E-3
         if i < n, s[i] == 101 || s[i] == 69 {
@@ -198,7 +216,43 @@ struct Lexer {
             }
         }
 
-        guard let v = Double(digits) else { throw CalcError("неверное число") }
+        guard let v = Double(digits) else { throw CalcError(tr("badNumber")) }
         return (v, i)
+    }
+
+    /// Turns groups/separators into a plain "1234.5" string, or nil if the combination is invalid.
+    private func interpretNumber(_ g: [String], _ seps: [UInt16]) -> String? {
+        if seps.isEmpty { return g[0].isEmpty ? nil : g[0] }
+        let punct = seps.enumerated().filter { $0.element == 44 || $0.element == 46 }
+        var decimalIndex: Int? = nil      // index into seps
+        let kinds = Set(punct.map { $0.element })
+        if kinds.count == 2 {
+            guard let lastP = punct.last else { return nil }
+            decimalIndex = lastP.offset
+            if punct.filter({ $0.element == lastP.element }).count > 1 { return nil }
+        } else if punct.count == 1 {
+            let p = punct[0]
+            let after = g[p.offset + 1]
+            let before = g[p.offset]
+            let couldGroup = after.count == 3 && before.count >= 1 && before.count <= 3
+            if couldGroup && p.element != decimal && p.offset == seps.count - 1 {
+                decimalIndex = nil        // 1,500 in "." mode → 1500
+            } else {
+                decimalIndex = p.offset   // 30000,00 / 1.5 / 1,500 in "," mode
+            }
+        }
+        if let d = decimalIndex, d != seps.count - 1 { return nil }  // decimal must be last
+        // Validate grouping: first group 1-3 digits, following groups exactly 3.
+        let lastGroupIdx = decimalIndex ?? seps.count
+        if lastGroupIdx > 0 {
+            guard g[0].count >= 1 && g[0].count <= 3 else { return nil }
+            for k in 1...lastGroupIdx where g[k].count != 3 { return nil }
+        }
+        var out = g[0...lastGroupIdx].joined()
+        if let d = decimalIndex {
+            if out.isEmpty { out = "0" }
+            out += "." + g[d + 1]
+        }
+        return out.isEmpty ? nil : out
     }
 }

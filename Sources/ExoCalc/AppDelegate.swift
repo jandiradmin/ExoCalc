@@ -16,12 +16,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var cancellables = Set<AnyCancellable>()
     private var lastHotKey: (Int, Int) = (-1, -1)
     private var refreshTimer: Timer?
+    private var lastLang: Lang = L10n.lang
 
     // MARK: - Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory)
         let s = AppSettings.shared
+        NSApp.setActivationPolicy(s.showInDock ? .regular : .accessory)
         rates.useNBU = s.useNBU
         engine.settings = s.calcSettings
 
@@ -76,6 +77,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         calc.applyAppearance()
         if lastHotKey != (s.hotKeyCode, s.hotKeyMods) { applyHotKey() }
+        let policy: NSApplication.ActivationPolicy = s.showInDock ? .regular : .accessory
+        if NSApp.activationPolicy() != policy {
+            NSApp.setActivationPolicy(policy)
+            if policy == .regular { NSApp.activate(ignoringOtherApps: true) }
+        }
+        statusItem?.isVisible = s.showInMenuBar || !s.showInDock
+        if lastLang != L10n.lang {
+            lastLang = L10n.lang
+            buildMainMenu()
+            for w in [helpWindow, historyWindow] { w?.close() }
+            helpWindow = nil
+            historyWindow = nil
+            settingsWindow?.title = tr("settingsTitle")
+            updateRatesStatus()
+        }
     }
 
     // MARK: - Window
@@ -116,7 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         lastHotKey = (s.hotKeyCode, s.hotKeyMods)
         let ok = HotKey.shared.register(code: UInt32(s.hotKeyCode), mods: UInt32(s.hotKeyMods))
         if !ok {
-            calc.flashStatus("Сочетание \(HotKeyFormat.string(code: s.hotKeyCode, mods: s.hotKeyMods)) занято — выберите другое в настройках")
+            calc.flashStatus(tr("hotkeyBusy", HotKeyFormat.string(code: s.hotKeyCode, mods: s.hotKeyMods)))
         }
         calc.updateStatus()
     }
@@ -124,23 +140,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Rates
 
     @objc func refreshRates() {
-        AppSettings.shared.ratesStatus = "Обновление…"
+        AppSettings.shared.ratesStatus = tr("updating")
         rates.refresh { [weak self] ok in
-            if !ok { self?.calc.flashStatus("Не удалось обновить курсы — используется сохранённый кэш") }
+            if !ok { self?.calc.flashStatus(tr("ratesFailed")) }
             self?.updateRatesStatus()
         }
     }
 
     func ratesTimeText() -> String {
-        guard let d = rates.updated else { return "нет" }
+        guard let d = rates.updated else { return tr("never") }
         let f = DateFormatter()
         f.dateFormat = Calendar.current.isDateInToday(d) ? "HH:mm" : "dd.MM HH:mm"
         return f.string(from: d)
     }
 
     func updateRatesStatus() {
-        var s = rates.updated == nil ? "Курсы ещё не загружены" : "Обновлено: \(ratesTimeText())"
-        if AppSettings.shared.useNBU, let nd = rates.nbuDate { s += " · НБУ на \(nd)" }
+        var s = rates.updated == nil ? tr("ratesNotLoaded") : tr("ratesUpdated", ratesTimeText())
+        if AppSettings.shared.useNBU, let nd = rates.nbuDate { s += " · " + tr("nbuOn", nd) }
         if let r = rates.rate("USD", "UAH") { s += " · 1 USD = \(engine.number(r, decimals: 4)) UAH" }
         AppSettings.shared.ratesStatus = s
         calc.updateStatus()
@@ -160,7 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func showSettings() {
         if settingsWindow == nil {
-            settingsWindow = makeWindow("Настройки ExoCalc",
+            settingsWindow = makeWindow(tr("settingsTitle"),
                                         SettingsView(onRefresh: { [weak self] in self?.refreshRates() }),
                                         resizable: false)
         }
@@ -174,7 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.calc.insertLine(expr)
                 self?.showWindow()
             }
-            helpWindow = makeWindow("Справка ExoCalc", view, resizable: true)
+            helpWindow = makeWindow(tr("helpTitle"), view, resizable: true)
         }
         NSApp.activate(ignoringOtherApps: true)
         helpWindow?.makeKeyAndOrderFront(nil)
@@ -186,7 +202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.calc.insertLine(expr)
                 self?.showWindow()
             }
-            historyWindow = makeWindow("История ExoCalc", view, resizable: true)
+            historyWindow = makeWindow(tr("historyTitle"), view, resizable: true)
         }
         NSApp.activate(ignoringOtherApps: true)
         historyWindow?.makeKeyAndOrderFront(nil)
@@ -213,6 +229,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             b.action = #selector(statusClicked(_:))
             b.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
+        statusItem.isVisible = AppSettings.shared.showInMenuBar || !AppSettings.shared.showInDock
     }
 
     @objc private func statusClicked(_ sender: Any?) {
@@ -234,13 +251,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             m.addItem(it)
         }
         let hk = HotKeyFormat.string(code: AppSettings.shared.hotKeyCode, mods: AppSettings.shared.hotKeyMods)
-        add("Показать / скрыть  (\(hk))", #selector(toggleWindow))
-        add("История", #selector(showHistory))
-        add("Справка", #selector(showHelp))
-        add("Настройки…", #selector(showSettings))
-        add("Обновить курсы", #selector(refreshRates))
+        add(tr("showHide", hk), #selector(toggleWindow))
+        add(tr("history"), #selector(showHistory))
+        add(tr("help"), #selector(showHelp))
+        add(tr("settings…"), #selector(showSettings))
+        add(tr("refreshRates"), #selector(refreshRates))
         m.addItem(.separator())
-        let quit = NSMenuItem(title: "Выйти из ExoCalc", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
+        let quit = NSMenuItem(title: tr("quit"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
         m.addItem(quit)
         return m
     }
@@ -266,48 +283,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         submenu("ExoCalc", [
-            item("О программе ExoCalc", #selector(showAbout), "", [], target: self),
+            item(tr("about"), #selector(showAbout), "", [], target: self),
             .separator(),
-            item("Настройки…", #selector(showSettings), ",", target: self),
+            item(tr("settings…"), #selector(showSettings), ",", target: self),
             .separator(),
-            item("Закрыть окно", #selector(NSWindow.performClose(_:)), "w"),
-            item("Выйти", #selector(NSApplication.terminate(_:)), "q"),
+            item(tr("closeWindow"), #selector(NSWindow.performClose(_:)), "w"),
+            item(tr("quit"), #selector(NSApplication.terminate(_:)), "q"),
         ])
 
-        let find = item("Найти…", #selector(NSTextView.performFindPanelAction(_:)), "f")
+        let find = item(tr("find…"), #selector(NSTextView.performFindPanelAction(_:)), "f")
         find.tag = Int(NSTextFinder.Action.showFindInterface.rawValue)
-        submenu("Правка", [
-            item("Отменить", Selector(("undo:")), "z"),
-            item("Повторить", Selector(("redo:")), "z", [.command, .shift]),
+        submenu(tr("edit"), [
+            item(tr("undo"), Selector(("undo:")), "z"),
+            item(tr("redo"), Selector(("redo:")), "z", [.command, .shift]),
             .separator(),
-            item("Вырезать", #selector(NSText.cut(_:)), "x"),
-            item("Копировать", #selector(NSText.copy(_:)), "c"),
-            item("Вставить", #selector(NSText.paste(_:)), "v"),
-            item("Выделить всё", #selector(NSText.selectAll(_:)), "a"),
+            item(tr("cut"), #selector(NSText.cut(_:)), "x"),
+            item(tr("copy"), #selector(NSText.copy(_:)), "c"),
+            item(tr("paste"), #selector(NSText.paste(_:)), "v"),
+            item(tr("selectAll"), #selector(NSText.selectAll(_:)), "a"),
             .separator(),
-            item("Копировать строку с результатом", #selector(CalcWindowController.copyCurrentLine(_:)), "c", [.command, .shift], target: calc),
-            item("Копировать только результат", #selector(CalcWindowController.copyCurrentResult(_:)), "c", [.command, .control], target: calc),
-            item("Копировать весь лист с результатами", #selector(CalcWindowController.copyAll(_:)), "c", [.command, .option], target: calc),
+            item(tr("copyLine"), #selector(CalcWindowController.copyCurrentLine(_:)), "c", [.command, .shift], target: calc),
+            item(tr("copyResult"), #selector(CalcWindowController.copyCurrentResult(_:)), "c", [.command, .control], target: calc),
+            item(tr("copyAll"), #selector(CalcWindowController.copyAll(_:)), "c", [.command, .option], target: calc),
             .separator(),
             find,
-            item("Автодополнение", #selector(NSTextView.complete(_:)), "\u{1b}", [.option]),
+            item(tr("complete"), #selector(NSTextView.complete(_:)), "\u{1b}", [.option]),
         ])
 
-        submenu("Лист", [
-            item("Очистить лист", #selector(CalcWindowController.clearSheet(_:)), "k", target: calc),
-            item("История", #selector(showHistory), "y", target: self),
+        submenu(tr("sheet"), [
+            item(tr("clearSheet"), #selector(CalcWindowController.clearSheet(_:)), "k", target: calc),
+            item(tr("history"), #selector(showHistory), "y", target: self),
             .separator(),
-            item("Крупнее", #selector(biggerFont), "=", target: self),
-            item("Мельче", #selector(smallerFont), "-", target: self),
-            item("Обычный размер", #selector(resetFont), "0", target: self),
+            item(tr("bigger"), #selector(biggerFont), "=", target: self),
+            item(tr("smaller"), #selector(smallerFont), "-", target: self),
+            item(tr("actualSize"), #selector(resetFont), "0", target: self),
             .separator(),
-            item("Обновить курсы", #selector(refreshRates), "r", target: self),
+            item(tr("refreshRates"), #selector(refreshRates), "r", target: self),
         ])
 
         let f1 = String(Character(Unicode.Scalar(UInt32(NSF1FunctionKey))!))
-        submenu("Справка", [
-            item("Справка ExoCalc", #selector(showHelp), f1, [], target: self),
-            item("Справка (альтернатива)", #selector(showHelp), "/", [.command], target: self),
+        submenu(tr("help"), [
+            item(tr("helpItem"), #selector(showHelp), f1, [], target: self),
+            item(tr("helpAlt"), #selector(showHelp), "/", [.command], target: self),
         ])
 
         NSApp.mainMenu = main

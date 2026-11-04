@@ -26,57 +26,66 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Числа") {
-                Picker("Десятичный разделитель", selection: $s.decimalSeparator) {
-                    Text("Точка — 1.5").tag(".")
-                    Text("Запятая — 1,5").tag(",")
+            Section(tr("numbers")) {
+                Picker(tr("decimalSep"), selection: $s.decimalSeparator) {
+                    Text(tr("dot")).tag(".")
+                    Text(tr("comma")).tag(",")
                 }
-                Picker("Разделитель тысяч", selection: $s.groupingSeparator) {
-                    Text("Нет — 1000000").tag("")
-                    Text("Пробел — 1 000 000").tag(" ")
-                    Text("Запятая — 1,000,000").tag(",")
-                    Text("Точка — 1.000.000").tag(".")
-                    Text("Апостроф — 1'000'000").tag("'")
+                Picker(tr("groupSep"), selection: $s.groupingSeparator) {
+                    Text(tr("gNone")).tag("")
+                    Text(tr("gSpace")).tag(" ")
+                    Text(tr("gComma")).tag(",")
+                    Text(tr("gDot")).tag(".")
+                    Text(tr("gApos")).tag("'")
                 }
                 Stepper(value: $s.decimals, in: 0...10) {
-                    Text("Знаков после запятой: \(s.decimals)")
+                    Text(tr("decimals", String(s.decimals)))
                 }
-                Toggle("Убирать лишние нули (2.50 → 2.5)", isOn: $s.trimZeros)
+                Toggle(tr("trimZeros"), isOn: $s.trimZeros)
+                Text(tr("inputNote")).font(.caption).foregroundColor(.secondary)
                 HStack {
-                    Text("Пример")
+                    Text(tr("example"))
                     Spacer()
                     Text(preview).font(.system(.body, design: .monospaced)).foregroundColor(Color(nsColor: Theme.result))
                 }
             }
 
-            Section("Шрифт") {
-                Picker("Шрифт", selection: $s.fontName) {
-                    Text("Системный моноширинный (SF Mono)").tag("")
+            Section(tr("font")) {
+                Picker(tr("font"), selection: $s.fontName) {
+                    Text(tr("systemMono")).tag("")
                     ForEach(fonts, id: \.self) { f in
                         Text(f).tag(f)
                     }
                 }
                 Stepper(value: $s.fontSize, in: 10...40, step: 1) {
-                    Text("Размер: \(Int(s.fontSize))  (⌘= / ⌘-)")
+                    Text(tr("fontSize", String(Int(s.fontSize))))
                 }
             }
 
-            Section("Поведение") {
+            Section(tr("behavior")) {
+                Picker(tr("language"), selection: $s.language) {
+                    Text(tr("langSystem")).tag("")
+                    Text("Русский").tag("ru")
+                    Text("Українська").tag("uk")
+                    Text("English").tag("en")
+                }
                 HotKeyRecorder()
-                Toggle("Прятать окно при переходе в другое приложение", isOn: $s.hideOnDeactivate)
-                Toggle("Поверх всех окон", isOn: $s.alwaysOnTop)
-                Toggle("Подсказки об ошибках в строках", isOn: $s.showHints)
-                Toggle("Запускать при входе в систему", isOn: Binding(
+                Toggle(tr("showDock"), isOn: $s.showInDock)
+                Toggle(tr("showMenuBar"), isOn: $s.showInMenuBar)
+                Toggle(tr("hideOnDeactivate"), isOn: $s.hideOnDeactivate)
+                Toggle(tr("alwaysOnTop"), isOn: $s.alwaysOnTop)
+                Toggle(tr("showHints"), isOn: $s.showHints)
+                Toggle(tr("launchAtLogin"), isOn: Binding(
                     get: { ui.launchAtLogin },
                     set: { setLogin($0) }
                 ))
             }
 
-            Section("Курсы валют") {
-                Toggle("Гривна по официальному курсу НБУ", isOn: $s.useNBU)
+            Section(tr("rates")) {
+                Toggle(tr("useNBU"), isOn: $s.useNBU)
                 Text(s.ratesStatus).foregroundColor(.secondary)
-                Button("Обновить сейчас", action: onRefresh)
-                Text("Мировые курсы — open.er-api.com, крипта — CoinGecko, НБУ — bank.gov.ua. Обновляются автоматически каждые 4 часа и хранятся офлайн.")
+                Button(tr("refreshNow"), action: onRefresh)
+                Text(tr("ratesSources"))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -106,9 +115,9 @@ struct HotKeyRecorder: View {
 
     var body: some View {
         HStack {
-            Text("Горячая клавиша (глобальная)")
+            Text(tr("hotkey"))
             Spacer()
-            Button(st.recording ? "Нажмите сочетание… (Esc — отмена)"
+            Button(st.recording ? tr("pressKeys")
                              : HotKeyFormat.string(code: s.hotKeyCode, mods: s.hotKeyMods)) {
                 if st.recording { stop() } else { start() }
             }

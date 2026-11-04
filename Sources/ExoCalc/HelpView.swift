@@ -11,51 +11,76 @@ struct HelpView: View {
         self.onInsert = onInsert
     }
 
-    static let sections: [(String, [String])] = [
-        ("Арифметика", ["2 + 3 * 4", "(2 + 3) * 4", "2^10", "10 mod 3", "5!", "800 × 12", "800x12", "1/3"]),
-        ("Проценты", ["100 + 15%", "250 - 20%", "15% of 800", "20% off 1500", "5% on 200"]),
-        ("Функции и константы", ["sqrt(144)", "√2", "sin(30°)", "cos(pi)", "log(1000)", "ln(e)",
-                                 "round(3.14159; 1)", "max(3; 9; 4)", "avg(10; 20; 60)", "2 pi"]),
-        ("Валюты (мир, НБУ, крипта)", ["600 usd in uah", "$20 + €15", "100 € в грн", "1000 грн to usd",
-                                       "0.05 btc in usd", "1 eth to uah", "5000 uah in eur"]),
-        ("Единицы", ["18 °C in °F", "100 km in miles", "5 ft in cm", "70 kg in lb", "1.5 h in min",
-                     "1 GB in MB", "100 km/h in m/s", "3 m * 4 m", "120 km / 1.5 h", "10 соток в м2",
-                     "1 gal in l", "1 km + 300 m"]),
-        ("Системы счисления и масштаб", ["255 in hex", "0xFF + 1", "10 in bin", "5k + 2.5 млн", "1234567 in sci"]),
-        ("Переменные", ["цена = 1250", "кол = 3", "цена * кол", "prev + 100"]),
-        ("Итоги блока (до пустой строки)", ["Аренда: 2000", "Свет: 150", "Интернет: 30", "итого"]),
-    ]
+    private static func sections() -> [(String, [String])] {
+        let ru = L10n.lang == .ru, uk = L10n.lang == .uk
+        let conv = ru ? "в" : (uk ? "у" : "in")
+        return [
+            (tr("hArith"), ["2 + 3 * 4", "(2 + 3) * 4", "2^10", "10 mod 3", "5!", "800 * 12", "800x12", "1/3"]),
+            (tr("hNumbers"), ["300,000.00 * 2", "300 000,00 * 2", "30000,00 * 8", "1.5 + 1,5", "19,480.00 + 2150"]),
+            (tr("hPercent"), ["100 + 15%", "250 - 20%",
+                              ru ? "15% от 800" : (uk ? "15% від 800" : "15% of 800"),
+                              "20% off 1500", "5% on 200"]),
+            (tr("hFunc"), ["sqrt(144)", "sqrt 2", "sin(30 deg)", "cos(pi)", "log(1000)", "ln(e)",
+                           "round(3.14159; 1)", "max(3; 9; 4)", "avg(10; 20; 60)", "2 pi"]),
+            (tr("hCurrency"), ru ? ["600 usd в uah", "600 долларов в гривнах", "$20 + €15", "100 евро в грн",
+                                    "1000 грн в долларах", "0.05 btc в usd", "1 eth в гривнах"]
+                            : uk ? ["600 usd у uah", "600 доларів у гривнях", "$20 + €15", "100 євро у грн",
+                                    "1000 грн у доларах", "0.05 btc у usd", "1 eth у гривнях"]
+                                 : ["600 usd in uah", "$20 + €15", "100 eur in uah", "1000 uah in usd",
+                                    "0.05 btc in usd", "1 eth in uah"]),
+            (tr("hUnits"), ru ? ["18 цельсия в фаренгейтах", "100 км в милях", "5 футов в см", "70 кг в фунтах",
+                                 "1.5 часа в минутах", "1 GB \(conv) MB", "100 км/ч в m/s", "3 m * 4 m",
+                                 "120 км / 1.5 ч", "10 соток в м2", "1 км + 300 м"]
+                         : uk ? ["18 цельсія у фаренгейтах", "100 км у милях", "5 футів у см", "70 кг у фунтах",
+                                 "1.5 години у хвилинах", "1 GB \(conv) MB", "100 км/ч у m/s", "3 m * 4 m",
+                                 "120 км / 1.5 години", "1 км + 300 м"]
+                              : ["18 celsius in fahrenheit", "100 km in miles", "5 ft in cm", "70 kg in lb",
+                                 "1.5 hours in minutes", "1 GB in MB", "100 km/h in m/s", "3 m * 4 m",
+                                 "120 km / 1.5 h", "1 km + 300 m"]),
+            (tr("hBases"), ["255 \(conv) hex", "0xFF + 1", "10 \(conv) bin", ru ? "5k + 2.5 млн" : (uk ? "5k + 2.5 мільйон" : "5k + 2.5 million"), "1234567 \(conv) sci"]),
+            (tr("hVars"), ru ? ["цена = 1250", "кол = 3", "цена * кол", "пред + 100"]
+                        : uk ? ["ціна = 1250", "кількість = 3", "ціна * кількість", "попер + 100"]
+                             : ["price = 1250", "qty = 3", "price * qty", "prev + 100"]),
+            (tr("hTotals"), ru ? ["Аренда: 2000", "Свет: 150", "Интернет: 30", "итого"]
+                          : uk ? ["Оренда: 2000", "Світло: 150", "Інтернет: 30", "разом"]
+                               : ["Rent: 2000", "Power: 150", "Internet: 30", "total"]),
+        ]
+    }
 
-    static let tips: [(String, String)] = [
-        ("⌥⌘=", "показать / спрятать окно из любого приложения (меняется в настройках)"),
-        ("Esc", "спрятать окно"),
-        ("клик по результату", "скопировать результат"),
-        ("⇧-клик, ⇧⌘C", "скопировать «выражение = результат»"),
-        ("⌃⌘C", "скопировать только результат текущей строки"),
-        ("⌥⌘C", "скопировать весь лист с результатами"),
-        ("⌘K", "очистить лист (строки уходят в историю, ⌘Z — вернуть)"),
-        ("⌘Y", "история вычислений"),
-        ("F5 или ⌥Esc", "автодополнение единиц, валют, функций, переменных"),
-        ("⌘= / ⌘- / ⌘0", "размер шрифта"),
-        ("⌘R", "обновить курсы"),
-        ("⌘,", "настройки: разделители, знаки после запятой, шрифт, горячая клавиша"),
-        ("in, to, as, в, →", "перевод в другую единицу или валюту"),
-        ("# или //", "комментарий; «Текст: 100» — подпись перед числом"),
-        ("prev, sum / итого, avg", "предыдущий результат, сумма и среднее блока"),
-        ("; ", "разделитель аргументов функций"),
-    ]
+    private static func tips() -> [(String, String)] {
+        [
+            (HotKeyFormat.string(code: AppSettings.shared.hotKeyCode, mods: AppSettings.shared.hotKeyMods), tr("tHotkey")),
+            ("Esc", tr("tEsc")),
+            (tr("tClickKey"), tr("tClick")),
+            ("⇧-click, ⇧⌘C", tr("tShiftClick")),
+            ("⌃⌘C", tr("tCtrlC")),
+            ("⌥⌘C", tr("tAltC")),
+            ("⌘K", tr("tK")),
+            ("⌘Y", tr("tY")),
+            ("F5, ⌥Esc", tr("tF5")),
+            ("⌘= / ⌘- / ⌘0", tr("tFont")),
+            ("⌘R", tr("tR")),
+            ("⌘,", tr("tComma")),
+            (tr("tConvKey"), tr("tConv")),
+            (tr("tCommentKey"), tr("tComment")),
+            (tr("tTotalsKey"), tr("tTotals")),
+            (";", tr("tArgs")),
+        ]
+    }
 
     var body: some View {
-        ScrollView {
+        let sections = HelpView.sections()
+        let tips = HelpView.tips()
+        return ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("ExoCalc — справка")
+                Text(tr("helpHeader"))
                     .font(.title2.bold())
-                Text("Пишите выражения обычным текстом. Кликните по примеру — он добавится в лист.")
+                Text(tr("helpIntro"))
                     .foregroundColor(.secondary)
 
-                ForEach(HelpView.sections.indices, id: \.self) { si in
-                    let title = HelpView.sections[si].0
-                    let lines = HelpView.sections[si].1
+                ForEach(sections.indices, id: \.self) { si in
+                    let title = sections[si].0
+                    let lines = sections[si].1
                     let results = engine.evaluate(lines: lines)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(title).font(.headline)
@@ -66,14 +91,14 @@ struct HelpView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Клавиши и приёмы").font(.headline)
-                    ForEach(HelpView.tips.indices, id: \.self) { ti in
+                    Text(tr("hKeys")).font(.headline)
+                    ForEach(tips.indices, id: \.self) { ti in
                         HStack(alignment: .firstTextBaseline) {
-                            Text(HelpView.tips[ti].0)
+                            Text(tips[ti].0)
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(Color(nsColor: Theme.unit))
                                 .frame(width: 170, alignment: .leading)
-                            Text(HelpView.tips[ti].1)
+                            Text(tips[ti].1)
                                 .font(.system(size: 12))
                         }
                     }

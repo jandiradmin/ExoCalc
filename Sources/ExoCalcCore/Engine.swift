@@ -91,12 +91,12 @@ public final class Engine {
 
     public func format(_ v: Value) throws -> String {
         guard v.num.isFinite else {
-            throw CalcError(v.num.isNaN ? "нет результата" : "слишком большое число")
+            throw CalcError(v.num.isNaN ? tr("noResult") : tr("tooBig"))
         }
         switch v.format {
         case .hex, .bin, .oct:
             guard v.num == v.num.rounded(), Swift.abs(v.num) < 9.0e15 else {
-                throw CalcError("hex/bin/oct — только для целых")
+                throw CalcError(tr("intOnly"))
             }
             let iv = Int64(v.num)
             let radix = v.format == .hex ? 16 : (v.format == .bin ? 2 : 8)

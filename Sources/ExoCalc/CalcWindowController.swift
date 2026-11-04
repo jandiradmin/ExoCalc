@@ -18,20 +18,49 @@ final class CalcWindowController: NSObject, NSWindowDelegate, NSTextViewDelegate
     private var statusOverrideUntil = Date.distantPast
     private let statusHeight: CGFloat = 24
 
-    static let welcome = """
-    # ExoCalc — F1 справка, Esc спрятать
-    14/105
-    600 usd in uah
-    18 °C in °F
-    100 km in miles
-    19,480.00 + 2150
-    800 × 12
-    20% of 1500
+    static var welcome: String {
+        switch L10n.lang {
+        case .ru: return """
+        # ExoCalc — F1 справка, Esc спрятать
+        14/105
+        600 долларов в гривнах
+        18 цельсия в фаренгейтах
+        100 км в милях
+        300 000,00 * 2
+        20% от 1500
 
-    Аренда: 2000
-    Свет: 150
-    итого
-    """
+        Аренда: 2000
+        Свет: 150
+        итого
+        """
+        case .uk: return """
+        # ExoCalc — F1 довідка, Esc сховати
+        14/105
+        600 доларів у гривнях
+        18 цельсія у фаренгейтах
+        100 км у милях
+        300 000,00 * 2
+        20% від 1500
+
+        Оренда: 2000
+        Світло: 150
+        разом
+        """
+        case .en: return """
+        # ExoCalc — F1 help, Esc to hide
+        14/105
+        600 usd in uah
+        18 celsius in fahrenheit
+        100 km in miles
+        300,000.00 * 2
+        20% of 1500
+
+        Rent: 2000
+        Power: 150
+        total
+        """
+        }
+    }
 
     init(engine: Engine, history: History) {
         self.engine = engine
@@ -129,7 +158,7 @@ final class CalcWindowController: NSObject, NSWindowDelegate, NSTextViewDelegate
     // MARK: - State
 
     func loadState() {
-        if let s = Storage.loadSheet() {
+        if let s = Storage.loadSheet(), !s.text.hasPrefix("# ExoCalc — F1 справка, Esc спрятать\n14/105\n600 usd in uah") {
             textView.string = s.text
             let loc = min(max(0, s.selection), (s.text as NSString).length)
             textView.setSelectedRange(NSRange(location: loc, length: 0))
@@ -272,12 +301,12 @@ final class CalcWindowController: NSObject, NSWindowDelegate, NSTextViewDelegate
             }
             if r.display != nil {
                 statusLabel.textColor = Theme.status
-                statusLabel.stringValue = "Клик по результату — копировать · ⇧клик или ⇧⌘C — «выражение = результат» · ⌥⌘C — весь лист"
+                statusLabel.stringValue = tr("stResult")
                 return
             }
         }
         statusLabel.textColor = Theme.status
-        statusLabel.stringValue = "F1 — справка · \(hotKeyText()) — показать/скрыть · ⌘Y — история · курсы: \(ratesText())"
+        statusLabel.stringValue = tr("stDefault", hotKeyText(), ratesText())
     }
 
     // MARK: - Copy & history
@@ -306,7 +335,7 @@ final class CalcWindowController: NSObject, NSWindowDelegate, NSTextViewDelegate
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(s, forType: .string)
-        flashStatus("Скопировано: \(s)")
+        flashStatus(tr("copied", s))
     }
 
     @objc func copyCurrentLine(_ sender: Any?) {
@@ -334,7 +363,7 @@ final class CalcWindowController: NSObject, NSWindowDelegate, NSTextViewDelegate
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(out.joined(separator: "\n"), forType: .string)
-        flashStatus("Скопирован весь лист с результатами")
+        flashStatus(tr("copiedAll"))
     }
 
     func recordHistory(line idx: Int) {
@@ -354,7 +383,7 @@ final class CalcWindowController: NSObject, NSWindowDelegate, NSTextViewDelegate
             textView.replaceCharacters(in: all, with: "")
             textView.didChangeText()
         }
-        flashStatus("Лист очищен (⌘Z — вернуть, строки сохранены в истории)")
+        flashStatus(tr("cleared"))
     }
 
     func insertLine(_ s: String) {

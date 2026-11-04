@@ -19,6 +19,9 @@ final class AppSettings: ObservableObject {
     @Published var showHints: Bool { didSet { d.set(showHints, forKey: "showHints") } }
     @Published var hideOnDeactivate: Bool { didSet { d.set(hideOnDeactivate, forKey: "hideOnDeactivate") } }
     @Published var alwaysOnTop: Bool { didSet { d.set(alwaysOnTop, forKey: "alwaysOnTop") } }
+    @Published var language: String { didSet { d.set(language, forKey: "language"); L10n.lang = L10n.resolve(language) } }
+    @Published var showInDock: Bool { didSet { d.set(showInDock, forKey: "showInDock") } }
+    @Published var showInMenuBar: Bool { didSet { d.set(showInMenuBar, forKey: "showInMenuBar") } }
     /// Not persisted: shown in Settings.
     @Published var ratesStatus: String = ""
 
@@ -27,7 +30,8 @@ final class AppSettings: ObservableObject {
         d.register(defaults: [
             "decimalSeparator": ".", "groupingSeparator": ",", "decimals": 2, "trimZeros": true,
             "fontName": "", "fontSize": 15.0,
-            "hotKeyCode": kVK_ANSI_Equal, "hotKeyMods": cmdKey | optionKey,
+            "hotKeyCode": kVK_ANSI_C, "hotKeyMods": controlKey | optionKey,
+            "language": "", "showInDock": true, "showInMenuBar": true,
             "useNBU": true, "showHints": true, "hideOnDeactivate": false, "alwaysOnTop": false,
         ])
         decimalSeparator = d.string(forKey: "decimalSeparator") ?? "."
@@ -42,6 +46,15 @@ final class AppSettings: ObservableObject {
         showHints = d.bool(forKey: "showHints")
         hideOnDeactivate = d.bool(forKey: "hideOnDeactivate")
         alwaysOnTop = d.bool(forKey: "alwaysOnTop")
+        language = d.string(forKey: "language") ?? ""
+        showInDock = d.bool(forKey: "showInDock")
+        showInMenuBar = d.bool(forKey: "showInMenuBar")
+        // Old default ⌥⌘= clashes with macOS Zoom — move to ⌃⌥C.
+        if hotKeyCode == kVK_ANSI_Equal && hotKeyMods == (cmdKey | optionKey) {
+            hotKeyCode = kVK_ANSI_C
+            hotKeyMods = controlKey | optionKey
+        }
+        L10n.lang = L10n.resolve(language)
     }
 
     private func fixGrouping() {

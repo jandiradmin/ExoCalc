@@ -37,17 +37,17 @@ private func d(_ id: String, _ dim: UnitDim, _ f: Double, _ a: [String], off: Do
 
 private let unitDefs: [Def] = [
     // Length — base metre
-    d("mm", .length, 0.001, ["millimeter", "millimeters", "millimetre", "millimetres", "мм", "миллиметр", "миллиметров", "миллиметра"]),
+    d("mm", .length, 0.001, ["millimeter", "millimeters", "millimetre", "millimetres", "мм", "миллиметр", "миллиметров", "миллиметра", "міліметр", "міліметрів"]),
     d("cm", .length, 0.01, ["centimeter", "centimeters", "centimetre", "centimetres", "см", "сантиметр", "сантиметров", "сантиметра"]),
     d("dm", .length, 0.1, ["decimeter", "decimeters", "дм"]),
-    d("m", .length, 1, ["meter", "meters", "metre", "metres", "м", "метр", "метров", "метра", "метры"]),
-    d("km", .length, 1000, ["kilometer", "kilometers", "kilometre", "kilometres", "км", "километр", "километров", "километра"]),
+    d("m", .length, 1, ["meter", "meters", "metre", "metres", "м", "метр", "метров", "метра", "метры", "метрів"]),
+    d("km", .length, 1000, ["kilometer", "kilometers", "kilometre", "kilometres", "км", "километр", "километров", "километра", "кілометр", "кілометрів", "кілометри"]),
     d("µm", .length, 1e-6, ["um", "micrometer", "micrometers", "micron", "microns", "мкм"]),
     d("nm", .length, 1e-9, ["nanometer", "nanometers", "нм"]),
     d("in", .length, 0.0254, ["inch", "inches", "дюйм", "дюймов", "дюйма"]),
     d("ft", .length, 0.3048, ["foot", "feet", "фут", "футов", "фута"]),
     d("yd", .length, 0.9144, ["yard", "yards", "ярд", "ярдов", "ярда"]),
-    d("mi", .length, 1609.344, ["mile", "miles", "миля", "миль", "мили", "милях"]),
+    d("mi", .length, 1609.344, ["mile", "miles", "миля", "миль", "мили", "милях", "миля"]),
     d("nmi", .length, 1852, ["nautical mile", "nautical miles", "морская миля", "морских миль"]),
 
     // Area — base m²
@@ -66,7 +66,7 @@ private let unitDefs: [Def] = [
     // Volume — base m³
     d("ml", .volume, 1e-6, ["mL", "milliliter", "milliliters", "millilitre", "мл", "миллилитр", "миллилитров"]),
     d("cl", .volume, 1e-5, ["centiliter", "centiliters"]),
-    d("l", .volume, 1e-3, ["L", "liter", "liters", "litre", "litres", "л", "литр", "литров", "литра", "литры"]),
+    d("l", .volume, 1e-3, ["L", "liter", "liters", "litre", "litres", "л", "литр", "литров", "литра", "литры", "літр", "літрів", "літри"]),
     d("m³", .volume, 1, ["m3", "m^3", "cubic meter", "cubic meters", "cubic metre", "м³", "м3", "куб", "кубов", "куба", "кубометр", "кубометров"]),
     d("cm³", .volume, 1e-6, ["cm3", "cm^3", "cc", "см³", "см3"]),
     d("gal", .volume, 0.003785411784, ["gallon", "gallons", "галлон", "галлонов", "галлона"]),
@@ -80,8 +80,8 @@ private let unitDefs: [Def] = [
 
     // Mass — base kg
     d("mg", .mass, 1e-6, ["milligram", "milligrams", "мг", "миллиграмм"]),
-    d("g", .mass, 1e-3, ["gram", "grams", "gramme", "gr", "г", "гр", "грамм", "граммов", "грамма"]),
-    d("kg", .mass, 1, ["kilogram", "kilograms", "kilo", "kilos", "кг", "килограмм", "килограммов", "килограмма", "кило"]),
+    d("g", .mass, 1e-3, ["gram", "grams", "gramme", "gr", "г", "гр", "грамм", "граммов", "грамма", "грам", "грамів"]),
+    d("kg", .mass, 1, ["kilogram", "kilograms", "kilo", "kilos", "кг", "килограмм", "килограммов", "килограмма", "кило", "кілограм", "кілограмів"]),
     d("t", .mass, 1000, ["ton", "tons", "tonne", "tonnes", "т", "тонна", "тонн", "тонны", "тонну"]),
     d("lb", .mass, 0.45359237, ["lbs", "pound", "pounds", "фунт", "фунтов", "фунта"]),
     d("oz", .mass, 0.028349523125, ["ounce", "ounces", "унция", "унций", "унции"]),
@@ -90,18 +90,18 @@ private let unitDefs: [Def] = [
 
     // Time — base second
     d("ms", .time, 0.001, ["millisecond", "milliseconds", "мс"]),
-    d("s", .time, 1, ["sec", "secs", "second", "seconds", "с", "сек", "секунда", "секунд", "секунды", "секунду"]),
-    d("min", .time, 60, ["mins", "minute", "minutes", "мин", "минута", "минут", "минуты", "минуту"]),
-    d("h", .time, 3600, ["hr", "hrs", "hour", "hours", "ч", "час", "часа", "часов"]),
+    d("s", .time, 1, ["sec", "secs", "second", "seconds", "с", "сек", "секунда", "секунд", "секунды", "секунду", "секунди"]),
+    d("min", .time, 60, ["mins", "minute", "minutes", "мин", "минута", "минут", "минуты", "минуту", "хв", "хвилина", "хвилин", "хвилини"]),
+    d("h", .time, 3600, ["hr", "hrs", "hour", "hours", "ч", "час", "часа", "часов", "година", "годин", "години"]),
     d("day", .time, 86400, ["days", "d", "день", "дня", "дней", "дн", "сутки", "суток"]),
-    d("week", .time, 604800, ["weeks", "wk", "неделя", "недели", "недель", "нед", "неделю"]),
-    d("month", .time, 2629746, ["months", "мес", "месяц", "месяца", "месяцев"]),
-    d("year", .time, 31556952, ["years", "yr", "yrs", "год", "года", "лет"]),
+    d("week", .time, 604800, ["weeks", "wk", "неделя", "недели", "недель", "нед", "неделю", "тиждень", "тижні", "тижнів"]),
+    d("month", .time, 2629746, ["months", "мес", "месяц", "месяца", "месяцев", "місяць", "місяці", "місяців"]),
+    d("year", .time, 31556952, ["years", "yr", "yrs", "год", "года", "лет", "рік", "роки", "років"]),
 
     // Temperature — base kelvin
-    d("°C", .temperature, 1, ["C", "℃", "°С", "celsius", "цельсий", "цельсия"], off: 273.15),
-    d("°F", .temperature, 5.0 / 9.0, ["F", "℉", "fahrenheit", "фаренгейт", "фаренгейта"], off: 459.67 * 5.0 / 9.0),
-    d("K", .temperature, 1, ["kelvin", "kelvins", "кельвин", "кельвина"]),
+    d("°C", .temperature, 1, ["C", "℃", "°С", "celsius", "цельсий", "цельсия", "цельсію", "цельсіях", "градус цельсия", "градусов цельсия", "градус цельсія", "градусів цельсія", "degree celsius", "degrees celsius"], off: 273.15),
+    d("°F", .temperature, 5.0 / 9.0, ["F", "℉", "fahrenheit", "фаренгейт", "фаренгейта", "фаренгейтах", "градус фаренгейта", "градусов фаренгейта", "градусів фаренгейта", "degree fahrenheit", "degrees fahrenheit"], off: 459.67 * 5.0 / 9.0),
+    d("K", .temperature, 1, ["kelvin", "kelvins", "кельвин", "кельвина", "кельвін", "кельвіна"]),
 
     // Data — base byte
     d("bit", .data, 0.125, ["bits", "бит", "бита", "битов"]),
@@ -128,7 +128,7 @@ private let unitDefs: [Def] = [
 
     // Angle — base radian
     d("rad", .angle, 1, ["radian", "radians", "рад"]),
-    d("°", .angle, Double.pi / 180, ["deg", "degree", "degrees", "градус", "градуса", "градусов"]),
+    d("°", .angle, Double.pi / 180, ["deg", "degree", "degrees", "градус", "градуса", "градусов", "градусів"]),
 
     // Energy — base joule
     d("J", .energy, 1, ["joule", "joules", "Дж", "дж"]),
@@ -141,9 +141,9 @@ private let unitDefs: [Def] = [
 
     // Power — base watt
     d("W", .power, 1, ["watt", "watts", "Вт", "вт"]),
-    d("kW", .power, 1000, ["kilowatt", "kilowatts", "кВт", "квт"]),
+    d("kW", .power, 1000, ["kilowatt", "kilowatts", "кВт", "квт", "кіловат"]),
     d("MW", .power, 1e6, ["megawatt", "megawatts", "МВт"]),
-    d("hp", .power, 745.69987158227, ["horsepower", "лс", "лошадиных сил"]),
+    d("hp", .power, 745.69987158227, ["horsepower", "лс", "лошадиных сил", "кінських сил"]),
 
     // Pressure — base pascal
     d("Pa", .pressure, 1, ["pascal", "pascals", "Па"]),
@@ -162,16 +162,16 @@ private let unitDefs: [Def] = [
 ]
 
 private let currencyAliases: [(String, [String])] = [
-    ("USD", ["$", "usd", "dollar", "dollars", "buck", "bucks", "доллар", "доллара", "долларов", "доллары", "долларах", "долл", "бакс", "бакса", "баксов"]),
-    ("EUR", ["€", "eur", "euro", "euros", "евро"]),
-    ("UAH", ["₴", "uah", "hryvnia", "hryvnias", "hryvna", "грн", "гривна", "гривны", "гривен", "гривну", "гривнах", "гривень"]),
-    ("GBP", ["£", "gbp", "sterling", "фунтов стерлингов"]),
+    ("USD", ["$", "usd", "dollar", "dollars", "buck", "bucks", "доллар", "доллара", "долларов", "доллары", "долларах", "долл", "бакс", "бакса", "баксов", "долар", "долари", "доларів", "доларах"]),
+    ("EUR", ["€", "eur", "euro", "euros", "евро", "євро"]),
+    ("UAH", ["₴", "uah", "hryvnia", "hryvnias", "hryvna", "грн", "гривна", "гривны", "гривен", "гривну", "гривнах", "гривень", "гривня", "гривні", "гривнях"]),
+    ("GBP", ["£", "gbp", "sterling", "фунтов стерлингов", "фунт стерлингов", "фунтів стерлінгів"]),
     ("JPY", ["¥", "yen", "иена", "иен", "йена"]),
     ("CNY", ["yuan", "юань", "юаней", "юаня"]),
     ("PLN", ["zloty", "zł", "злотый", "злотых"]),
     ("CHF", ["franc", "francs", "франк", "франков"]),
     ("TRY", ["lira", "лира", "лир"]),
-    ("BTC", ["₿", "bitcoin", "bitcoins", "биткоин", "биткоина", "биткоинов", "биток"]),
+    ("BTC", ["₿", "bitcoin", "bitcoins", "биткоин", "биткоина", "биткоинов", "биток", "біткоїн", "біткоін"]),
     ("ETH", ["ether", "ethereum", "эфир", "эфира"]),
     ("USDT", ["tether"]),
     ("SOL", ["solana"]),
@@ -184,6 +184,8 @@ public final class UnitRegistry {
     private var lower: [String: CalcUnit] = [:]
     private var curExact: [String: String] = [:]
     private var curLower: [String: String] = [:]
+    private var stemUnit: [String: CalcUnit] = [:]
+    private var stemCur: [String: String] = [:]
     public let rates: RateStore
     public private(set) var completionWords: [String] = []
 
@@ -196,6 +198,10 @@ public final class UnitRegistry {
                 if exact[a] == nil { exact[a] = u }
                 let l = a.lowercased()
                 if lower[l] == nil { lower[l] = u }
+                if UnitRegistry.hasCyrillic(a) {
+                    let st = UnitRegistry.stem(a)
+                    if stemUnit[st] == nil { stemUnit[st] = u }
+                }
                 words.insert(a)
             }
         }
@@ -205,6 +211,10 @@ public final class UnitRegistry {
                 if curExact[a] == nil { curExact[a] = code }
                 let l = a.lowercased()
                 if curLower[l] == nil { curLower[l] = code }
+                if UnitRegistry.hasCyrillic(a) {
+                    let st = UnitRegistry.stem(a)
+                    if stemCur[st] == nil { stemCur[st] = code }
+                }
                 words.insert(a)
             }
         }
@@ -230,7 +240,34 @@ public final class UnitRegistry {
         if let c = curLower[l] { return currency(c) }
         let up = s.uppercased()
         if codeLike, rates.knows(up) { return currency(up) }
+        // Russian/Ukrainian word forms: "фаренгейтах", "гривнях", "долларов", "милях"
+        if UnitRegistry.hasCyrillic(s) {
+            let st = UnitRegistry.stem(s)
+            if let u = stemUnit[st] { return u }
+            if let c = stemCur[st] { return currency(c) }
+        }
         return nil
+    }
+
+    static func hasCyrillic(_ s: String) -> Bool {
+        s.unicodeScalars.contains { $0.value >= 0x400 && $0.value <= 0x4FF }
+    }
+
+    private static let endings: [String] = [
+        "ами", "ями", "ією", "ах", "ях", "ов", "ев", "ей", "ів", "їв", "ам", "ям", "ом", "ем", "ою", "ею",
+        "ий", "ій", "ия", "ія", "ию", "ію", "ые", "ых", "и", "ы", "і", "а", "я", "у", "ю", "е", "є", "о", "ь", "й",
+    ]
+
+    /// Crude stemmer: strips a common case/plural ending from each word (keeps ≥3 letters).
+    static func stem(_ s: String) -> String {
+        s.lowercased().split(separator: " ").map { part -> String in
+            let w = String(part)
+            guard w.count >= 4, hasCyrillic(w) else { return w }
+            for e in endings where w.hasSuffix(e) && w.count - e.count >= 3 {
+                return String(w.dropLast(e.count))
+            }
+            return w
+        }.joined(separator: " ")
     }
 
     static func isCodeLike(_ s: String) -> Bool {
@@ -241,12 +278,12 @@ public final class UnitRegistry {
 
     public func convert(_ v: Double, _ from: CalcUnit, _ to: CalcUnit) throws -> Double {
         if from == to { return v }
-        guard from.dim == to.dim else { throw CalcError("нельзя перевести \(from.id) в \(to.id)") }
+        guard from.dim == to.dim else { throw CalcError(tr("cantConvert", from.id, to.id)) }
         if from.dim == .currency {
             guard let a = rates.perUSD[from.id], let b = rates.perUSD[to.id], a > 0 else {
-                if rates.perUSD.count <= 1 { throw CalcError("курсы ещё не загружены") }
+                if rates.perUSD.count <= 1 { throw CalcError(tr("noRates")) }
                 let missing = rates.perUSD[from.id] == nil ? from.id : to.id
-                throw CalcError("нет курса для \(missing)")
+                throw CalcError(tr("noRate", missing))
             }
             return v / a * b
         }
