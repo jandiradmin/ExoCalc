@@ -1,0 +1,61 @@
+import Foundation
+import ExoCalcCore
+
+enum SelfTest {
+    static func run() -> Bool {
+        let rates = RateStore(cacheURL: nil)
+        rates.setTestRates(["USD": 1, "EUR": 0.5, "UAH": 40, "BTC": 0.00001])
+        let e = Engine(rates: rates)
+
+        let cases: [(String, String)] = [
+            ("2 + 3 * 4", "14"), ("(2 + 3) * 4", "20"), ("2^10", "1,024"), ("-2^2", "-4"),
+            ("10 mod 3", "1"), ("5!", "120"), ("14/105", "0.13"), ("20/72=0.2777777778", "0.28"),
+            ("19,480.00+2150", "21,630"), ("800×12", "9,600"), ("800x12", "9,600"), ("320000/45", "7,111.11"),
+            ("1/3", "0.33"), ("0.0004", "0.0004"),
+            ("100 + 15%", "115"), ("250 - 20%", "200"), ("15% of 800", "120"), ("20% off 1500", "1,200"),
+            ("5% on 200", "210"), ("50%", "50%"),
+            ("sqrt(144)", "12"), ("√16", "4"), ("sqrt 81", "9"), ("sin(30°)", "0.5"),
+            ("round(3.14159; 1)", "3.1"), ("max(3; 9; 4)", "9"), ("2 pi", "6.28"), ("log(1000)", "3"),
+            ("600 usd in uah", "24,000 UAH"), ("$20 + €15", "50 USD"), ("100 eur в грн", "8,000 UAH"),
+            ("1000 грн to usd", "25 USD"), ("1 btc in usd", "100,000 USD"), ("usd in uah", "40 UAH"),
+            ("18 Celsius in Fahrenheit", "64.4 °F"), ("100 °F in °C", "37.78 °C"), ("1 km + 500 m", "1.5 km"),
+            ("5 ft in cm", "152.4 cm"), ("1 GB in MB", "1,000 MB"), ("90 min in h", "1.5 h"),
+            ("100 km/h in m/s", "27.78 m/s"), ("3 m * 4 m", "12 m²"), ("120 km / 1.5 h", "80 km/h"),
+            ("10 соток в м2", "1,000 m²"), ("5 in in cm", "12.7 cm"), ("12 in", "12 in"),
+            ("70 kg in lb", "154.32 lb"), ("1 gal in l", "3.79 l"),
+            ("255 in hex", "0xFF"), ("0xFF + 1", "256"), ("10 in bin", "0b1010"),
+            ("5k", "5,000"), ("2.5 млн", "2,500,000"),
+            ("Аренда: 2000", "2,000"), ("1/3 // треть", "0.33"),
+        ]
+
+        var ok = true
+        for (expr, want) in cases {
+            let r = e.evaluate(expr)
+            let got = r.display ?? "ERR: \(r.error ?? "?")"
+            if got != want {
+                ok = false
+                print("✗ \(expr)\n    ожидалось: \(want)\n    получено:  \(got)")
+            }
+        }
+
+        let sheet = ["a = 10", "b = 5", "a * b", "", "x: 100", "y: 50", "sum", "prev * 2", "# заголовок", "avg"]
+        let want: [String?] = ["10", "5", "50", nil, "100", "50", "150", "300", nil, "0"]
+        let res = e.evaluate(lines: sheet)
+        for (idx, line) in sheet.enumerated() where res[idx].display != want[idx] {
+            ok = false
+            print("✗ лист, строка «\(line)»: ожидалось \(want[idx] ?? "—"), получено \(res[idx].display ?? res[idx].error ?? "—")")
+        }
+
+        var comma = CalcSettings()
+        comma.decimalSeparator = ","
+        comma.groupingSeparator = " "
+        e.settings = comma
+        for (expr, w) in [("1 234,5 + 0,5", "1 235"), ("2,5 * 2", "5"), ("10/3", "3,33"), ("max(1; 2)", "2")] {
+            let got = e.evaluate(expr).display ?? "ERR: \(e.evaluate(expr).error ?? "?")"
+            if got != w { ok = false; print("✗ [запятая] \(expr)\n    ожидалось: \(w)\n    получено:  \(got)") }
+        }
+
+        print(ok ? "✓ Все тесты пройдены (\(cases.count + sheet.count + 4))" : "Есть ошибки — пришлите этот вывод.")
+        return ok
+    }
+}
