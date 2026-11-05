@@ -2,6 +2,7 @@
 // Pure ES module: runs in the app (WebView2) and in Node for tests.
 
 import { UNIT_DEFS, CURRENCY_ALIASES, CRYPTO_IDS, COMMON_CODES, STRINGS } from "./data.js";
+import { daysFromCivil, civilFromDays, validDate, addMonths, weekday, MONTHS, DAY_WORDS, NOW_WORDS, UNTIL_WORDS, ZONES, localTz, tzOffset } from "./datetime.js";
 
 // ───────────────────────── Localization ─────────────────────────
 
@@ -228,6 +229,10 @@ class Lexer {
       const p = toks[toks.length - 1];
       const prevAllows = !p || p.kind === "op" || p.kind === "lparen" || p.kind === "sep";
       const leadingSep = (c === 44 || c === 46) && i + 1 < n && isDigit(this.code(i + 1)) && prevAllows;
+      if (isDigit(c)) {
+        const dt = this.lexDateTime(i);
+        if (dt) { push(dt.kind, s.slice(i, dt.end), i, dt.end, dt.num); i = dt.end; continue; }
+      }
       if (isDigit(c) || leadingSep) {
         const [v, e] = this.lexNumber(i);
         push("num", s.slice(i, e), i, e, v);
@@ -267,6 +272,25 @@ class Lexer {
     }
     toks.push({ kind: "eof", text: "", num: 0, start: this.base + n, end: this.base + n, spaceBefore: space });
     return toks;
+  }
+
+  /** 23:30, 23:30:15, 12.12.2026, 2026-12-12, 12/31/2026 (US order). */
+  lexDateTime(i) {
+    const rest = this.s.slice(i);
+    let m = rest.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?![\d:])/);
+    if (m) {
+      const h = +m[1], mi = +m[2], se = m[3] ? +m[3] : 0;
+      if (h <= 24 && mi < 60 && se < 60) return { kind: "clock", num: h * 3600 + mi * 60 + se, end: i + m[0].length };
+    }
+    const date = (y, mo, d, len) => (validDate(y, mo, d) ? { kind: "date", num: daysFromCivil(y, mo, d), end: i + len } : null);
+    if ((m = rest.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?![\d.])/))) {
+      const r = date(+m[3], +m[2], +m[1], m[0].length);
+      if (!r) throw new CalcError(tr("badDate"));
+      return r;
+    }
+    if ((m = rest.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)/))) return date(+m[1], +m[2], +m[3], m[0].length);
+    if ((m = rest.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?!\d)/))) return date(+m[3], +m[1], +m[2], m[0].length);
+    return null;
   }
 
   lexNumber(start) {
@@ -375,13 +399,17 @@ const PREV_WORDS = new Set(["prev", "ans", "пред", "попер"]);
 const SUM_WORDS = new Set(["sum", "total", "итого", "сумма", "всего", "разом", "підсумок", "усього", "всього"]);
 const AVG_WORDS = new Set(["avg", "average", "среднее", "середнє"]);
 
-const V = (num, unit = null, isPercent = false, format = "dec") => ({ num, unit, isPercent, format });
+const V = (num, unit = null, isPercent = false, format = "dec", kind = "plain", tz = null) => ({ num, unit, isPercent, format, kind, tz });
+const CLOCK = (sec, tz = null) => V(sec, null, false, "dec", "clock", tz);
+const DATE = (days) => V(days, null, false, "dec", "date");
+const isTimeUnit = (v) => v.kind === "plain" && v.unit && v.unit.dim === "time" && !v.isPercent;
+const isPlainNum = (v) => v.kind === "plain" && !v.unit && !v.isPercent;
 const copy = (v) => ({ ...v });
 
 class Parser {
   constructor(tokens, reg, ctx) {
     this.t = tokens; this.i = 0; this.reg = reg; this.ctx = ctx; this.marks = []; this.warnings = [];
-    this.fmt = String; this.decimals = 2; this.override = null;
+    this.fmt = String; this.fmtValue = (v) => String(v.num); this.decimals = 2; this.override = null;
   }
   matches(typed, actual) {
     const str = String(typed);
@@ -459,10 +487,15 @@ class Parser {
       while (this.t[j].kind !== "eof" && !this.isOp(this.t[j], "=")) j++;
       if (j === this.i) continue;
       const seg = this.t.slice(this.i, j);
-      const isNote = this.t[j].kind === "eof" && seg[0].kind === "num" && seg.every((x) => x.kind === "num" || x.kind === "ident");
+      const noteTok = (x, k) => ["num", "ident", "clock", "date", "sep", "lparen", "rparen"].includes(x.kind) ||
+        (x.kind === "op" && (x.text === "+" || x.text === "-") && k > 0 && seg[k - 1].kind === "lparen");
+      const isNote = this.t[j].kind === "eof" && ["num", "clock", "date"].includes(seg[0].kind) && seg.every(noteTok);
       if (isNote) {
-        if (!v.isPercent && !this.matches(seg[0].num, v.num)) {
-          this.warnings.push(tr("noteFix", seg.map((x) => x.text).join(" "), this.fmt(v.num)));
+        const differs = seg[0].kind === "num"
+          ? v.kind === "plain" && !v.isPercent && v.format !== "hms" && !this.matches(seg[0].num, v.num)
+          : seg[0].kind !== v.kind || (v.kind === "date" ? seg[0].num !== v.num : (((seg[0].num - v.num) % 86400) + 86400) % 86400 !== 0);
+        if (differs) {
+          this.warnings.push(tr("noteFix", seg.map((x) => x.text).join(" "), this.fmtValue(v)));
           this.marks.push({ start: seg[0].start, end: seg[seg.length - 1].end, kind: "error" });
         }
         this.i = j;
@@ -471,7 +504,7 @@ class Parser {
       if (this.cur.kind === "op" && ["+", "-", "*", "/", "^"].includes(this.cur.text)) v = this.continueOps(v, true);
       else {
         // Always continue from the exact answer (the text may show it rounded).
-        if (this.cur.kind === "num" && !v.isPercent) {
+        if (this.cur.kind === "num" && !v.isPercent && v.kind === "plain") {
           if (!this.matches(this.cur.num, v.num)) {
             this.warnings.push(tr("chainFix", this.cur.text, this.fmt(v.num)));
             this.marks.push({ start: this.cur.start, end: this.cur.end, kind: "error" });
@@ -501,6 +534,16 @@ class Parser {
           this.i = j + 1;
           v = copy(v); v.format = FORMAT_WORDS[nt.text.toLowerCase()];
           continue;
+        }
+        if (v.kind === "clock") {
+          const z = this.matchZone(j);
+          if (z) {
+            this.mark(this.i, this.i, "keyword");
+            this.mark(j, j + z.n - 1, "unit");
+            this.i = j + z.n;
+            v = this.toZone(v, z);
+            continue;
+          }
         }
         const m = this.matchUnit(j);
         if (!m) {
@@ -585,7 +628,8 @@ class Parser {
       if (this.isOp(this.cur, "%") && !v.isPercent) { this.i++; v.isPercent = true; continue; }
       break;
     }
-    if (!v.unit && !v.isPercent) {
+    v = this.dateTimePostfix(v);
+    if (v.kind === "plain" && !v.unit && !v.isPercent) {
       if (this.cur.kind === "ident" && SCALES[this.cur.text] !== undefined) {
         this.mark(this.i, this.i, "keyword");
         v.num *= SCALES[this.cur.text];
@@ -602,6 +646,7 @@ class Parser {
           this.mark(this.i, this.i + m[1] - 1, "unit");
           this.i += m[1];
           v.unit = m[0];
+          v = this.compoundUnits(v);
         }
       }
     }
@@ -611,6 +656,8 @@ class Parser {
   parsePrimary() {
     const tok = this.cur;
     switch (tok.kind) {
+      case "clock": this.i++; return CLOCK(tok.num);
+      case "date": this.i++; return DATE(tok.num);
       case "num":
         if (this.override && this.override.index === this.i) { this.i++; return V(this.override.value); }
         this.i++; return V(tok.num);
@@ -629,6 +676,27 @@ class Parser {
   parseIdent() {
     const tok = this.cur, name = tok.text, low = name.toLowerCase();
     if (this.ctx.vars.has(name)) { this.mark(this.i, this.i, "variable"); this.i++; return this.ctx.vars.get(name); }
+    if (DAY_WORDS[low] !== undefined) { this.mark(this.i, this.i, "keyword"); this.i++; return DATE(this.ctx.today + DAY_WORDS[low]); }
+    if (NOW_WORDS.has(low)) { this.mark(this.i, this.i, "keyword"); this.i++; return CLOCK(this.ctx.nowSec); }
+    if (UNTIL_WORDS.has(low) && ["date", "num"].includes(this.at(this.i + 1).kind)) {
+      this.mark(this.i, this.i, "keyword");
+      this.i++;
+      const target = this.upcomingDate();
+      return V(target - this.ctx.today, this.reg.lookup("day"));
+    }
+    if (MONTHS[low] && this.at(this.i + 1).kind === "num") {
+      // "December 12, 2026"
+      const month = MONTHS[low];
+      this.mark(this.i, this.i, "unit");
+      this.i++;
+      const day = this.cur.num;
+      this.i++;
+      if (this.cur.kind === "sep") this.i++;
+      let year = civilFromDays(this.ctx.today)[0];
+      if (this.cur.kind === "num" && Number.isInteger(this.cur.num) && this.cur.num >= 1000) { year = this.cur.num; this.i++; }
+      if (!Number.isInteger(day) || !validDate(year, month, day)) throw new CalcError(tr("badDate"));
+      return DATE(daysFromCivil(year, month, day));
+    }
     const f = FUNC_ALIASES[low];
     if (f) {
       if (this.at(this.i + 1).kind === "lparen") {
@@ -688,7 +756,106 @@ class Parser {
     return [acc || V(0), n];
   }
 
+  // ───── Dates and times ─────
+  dateTimePostfix(v) {
+    const low = () => (this.cur.kind === "ident" ? this.cur.text.toLowerCase() : "");
+    // "12 December 2026", "12 декабря"
+    if (isPlainNum(v) && Number.isInteger(v.num) && v.num >= 1 && v.num <= 31 && MONTHS[low()]) {
+      const month = MONTHS[low()];
+      this.mark(this.i, this.i, "unit");
+      this.i++;
+      let year = civilFromDays(this.ctx.today)[0];
+      if (this.cur.kind === "num" && Number.isInteger(this.cur.num) && this.cur.num >= 1000 && this.cur.num <= 9999) { year = this.cur.num; this.i++; }
+      if (!validDate(year, month, v.num)) throw new CalcError(tr("badDate"));
+      return DATE(daysFromCivil(year, month, v.num));
+    }
+    // "3pm", "11 am"
+    if (isPlainNum(v) && Number.isInteger(v.num) && v.num >= 1 && v.num <= 12 && (low() === "am" || low() === "pm")) {
+      v = CLOCK(v.num * 3600);
+    }
+    if (v.kind === "clock") {
+      if (low() === "am" || low() === "pm") {
+        const h = Math.floor(v.num / 3600), rest = v.num - h * 3600;
+        const h24 = low() === "pm" ? (h % 12) + 12 : h % 12;
+        this.mark(this.i, this.i, "unit");
+        this.i++;
+        v = CLOCK(h24 * 3600 + rest, v.tz);
+      }
+      if (!v.tz && !this.isConvWord(this.cur)) {
+        const z = this.matchZone(this.i);
+        if (z) { this.mark(this.i, this.i + z.n - 1, "unit"); this.i += z.n; v = CLOCK(v.num, z); }
+      }
+    }
+    return v;
+  }
+  /** "8 h 35 min", "1 day 2 h": add following number+unit of the same kind. */
+  compoundUnits(v) {
+    while (this.cur.kind === "num" && ["time", "length", "mass"].includes(v.unit.dim)) {
+      const m = this.matchUnit(this.i + 1);
+      if (!m || m[0].dim !== v.unit.dim || CONV_WORDS.has(this.at(this.i + 1).text.toLowerCase())) break;
+      const n = this.cur.num;
+      this.mark(this.i + 1, this.i + m[1], "unit");
+      this.i += 1 + m[1];
+      v = this.addSub(v, V(n, m[0]), false);
+    }
+    return v;
+  }
+  matchZone(j) {
+    if (this.at(j).kind !== "ident") return null;
+    for (const n of [2, 1]) {
+      const toks = this.t.slice(j, j + n);
+      if (toks.length < n || toks.some((x) => x.kind !== "ident" && !(x.kind === "op" && x.text === "-"))) continue;
+      const key = toks.map((x) => x.text).join(" ").toLowerCase();
+      if (ZONES[key]) return { id: ZONES[key][0], label: ZONES[key][1], n };
+    }
+    return null;
+  }
+  zoneOffset(z) { return tzOffset(z ? z.id : this.ctx.localTz, this.ctx.now); }
+  toZone(v, z) { return CLOCK(v.num + this.zoneOffset(z) - this.zoneOffset(v.tz), z); }
+  upcomingDate() {
+    const tok = this.cur;
+    if (tok.kind === "date") { this.i++; return tok.num; }
+    const m = tok.text.match(/^(\d{1,2})[.,](\d{1,2})$/);
+    if (!m) throw new CalcError(tr("badDate"));
+    this.i++;
+    const d = +m[1], mo = +m[2];
+    let y = civilFromDays(this.ctx.today)[0];
+    if (!validDate(y, mo, d)) throw new CalcError(tr("badDate"));
+    if (daysFromCivil(y, mo, d) < this.ctx.today) y++;
+    return daysFromCivil(y, mo, d);
+  }
+  addSubDT(a, b, sub) {
+    const sign = sub ? -1 : 1;
+    if (a.isPercent || b.isPercent) throw new CalcError(tr("dateOp"));
+    // clock ± duration
+    if (a.kind === "clock" && isTimeUnit(b)) return CLOCK(a.num + sign * this.reg.convert(b.num, b.unit, this.reg.lookup("s")), a.tz);
+    if (b.kind === "clock" && isTimeUnit(a) && !sub) return CLOCK(b.num + this.reg.convert(a.num, a.unit, this.reg.lookup("s")), b.tz);
+    if (a.kind === "clock" && b.kind === "clock" && sub) {
+      const bInA = a.tz || b.tz ? this.toZone(b, a.tz).num : b.num;
+      return V(a.num - bInA, this.reg.lookup("s"), false, "hms");
+    }
+    if (a.kind === "clock" && isPlainNum(b)) throw new CalcError(tr("timeNeedsUnit"));
+    // date ± duration
+    if (a.kind === "date" && isTimeUnit(b)) return DATE(this.shiftDate(a.num, sign * b.num, b.unit));
+    if (b.kind === "date" && isTimeUnit(a) && !sub) return DATE(this.shiftDate(b.num, a.num, a.unit));
+    if (a.kind === "date" && b.kind === "date" && sub) return V(a.num - b.num, this.reg.lookup("day"));
+    if (a.kind === "date" && isPlainNum(b)) throw new CalcError(tr("dateNeedsUnit"));
+    throw new CalcError(tr("dateOp"));
+  }
+  shiftDate(days, n, unit) {
+    if (unit.id === "month" || unit.id === "year") {
+      const months = n * (unit.id === "year" ? 12 : 1);
+      if (!Number.isInteger(Math.round(months * 1e9) / 1e9)) throw new CalcError(tr("dateWholeDays"));
+      return addMonths(days, Math.round(months));
+    }
+    const d = this.reg.convert(n, unit, this.reg.lookup("day"));
+    if (Math.abs(d - Math.round(d)) > 1e-9) throw new CalcError(tr("dateWholeDays"));
+    return days + Math.round(d);
+  }
+
   convert(v, u) {
+    if (v.kind === "clock" && u.dim === "time") return V(this.reg.convert(v.num, this.reg.lookup("s"), u), u);
+    if (v.kind !== "plain") throw new CalcError(tr("dateOp"));
     if (v.isPercent) throw new CalcError(tr("pctConvert", u.id));
     const r = copy(v);
     r.format = "dec";
@@ -697,6 +864,7 @@ class Parser {
     return r;
   }
   addSub(a, b, sub) {
+    if (a.kind !== "plain" || b.kind !== "plain") return this.addSubDT(a, b, sub);
     const sign = sub ? -1 : 1;
     if (b.isPercent && !a.isPercent) { const r = copy(a); r.num = a.num * (1 + (sign * b.num) / 100); return r; }
     if (a.isPercent !== b.isPercent) throw new CalcError(tr("pctAdd"));
@@ -707,6 +875,9 @@ class Parser {
     return r;
   }
   mul(a, b) {
+    if (a.kind === "clock" && isPlainNum(b)) return CLOCK(a.num * b.num, a.tz);
+    if (b.kind === "clock" && isPlainNum(a)) return CLOCK(a.num * b.num, b.tz);
+    if (a.kind !== "plain" || b.kind !== "plain") throw new CalcError(tr("dateOp"));
     if (a.isPercent && b.isPercent) return V((a.num * b.num) / 100, null, true);
     if (b.isPercent) { const r = copy(a); r.num = (a.num * b.num) / 100; return r; }
     if (a.isPercent) { const r = copy(b); r.num = (b.num * a.num) / 100; return r; }
@@ -723,6 +894,8 @@ class Parser {
   }
   div(a, b) {
     if (b.num === 0) throw new CalcError(tr("divZero"));
+    if (a.kind === "clock" && isPlainNum(b)) return CLOCK(a.num / b.num, a.tz);
+    if (a.kind !== "plain" || b.kind !== "plain") throw new CalcError(tr("dateOp"));
     if (a.isPercent && b.isPercent) return V(a.num / b.num);
     if (b.isPercent) { const r = copy(a); r.num = a.num / (b.num / 100); return r; }
     if (a.isPercent) return V(a.num / b.num, null, true);
@@ -842,7 +1015,7 @@ function factorial(x) {
 // ───────────────────────── Engine ─────────────────────────
 
 export function defaultSettings() {
-  return { decimalSeparator: ".", groupingSeparator: ",", decimals: 2, trimZeros: true };
+  return { decimalSeparator: ".", groupingSeparator: ",", decimals: 2, trimZeros: true, dateFormat: "dmy" };
 }
 
 export class Engine {
@@ -851,10 +1024,15 @@ export class Engine {
     this.registry = new UnitRegistry(rates);
     this.settings = defaultSettings();
     this.lastVariables = [];
+    this.now = () => new Date();       // overridable in tests
+    this.timeZone = null;              // null = system zone
   }
 
   evaluate(lines, recordVariables = false) {
-    const ctx = { vars: new Map(), prev: null, block: [] };
+    const now = this.now(), tz = this.timeZone || localTz();
+    const off = tzOffset(tz, now), t = Math.floor(now.getTime() / 1000) + off;
+    const ctx = { vars: new Map(), prev: null, block: [], now, localTz: tz,
+      today: Math.floor(t / 86400), nowSec: Math.floor((((t % 86400) + 86400) % 86400) / 60) * 60 };
     const res = lines.map((l) => this.evalLine(l, ctx));
     if (recordVariables) this.lastVariables = [...ctx.vars.keys()];
     return res;
@@ -875,7 +1053,8 @@ export class Engine {
     let end = n;
     const ci = line.indexOf("//", start);
     if (ci >= 0) { end = ci; res.highlights.push({ start: ci, end: n, kind: "comment" }); }
-    const colon = line.indexOf(":", start);
+    let colon = line.indexOf(":", start);
+    while (colon > 0 && /\d/.test(line[colon - 1] || "") && /\d/.test(line[colon + 1] || "")) colon = line.indexOf(":", colon + 1);
     if (colon >= 0 && colon < end) {
       const pre = line.slice(start, colon);
       const hasLetter = [...pre].some((ch) => isLetter(ch.charCodeAt(0)));
@@ -888,10 +1067,11 @@ export class Engine {
     let parser = null;
     try {
       const toks = new Lexer(body, start, this.settings).tokenize();
-      for (const t of toks) if (t.kind === "num") res.highlights.push({ start: t.start, end: t.end, kind: "number" });
+      for (const t of toks) if (t.kind === "num" || t.kind === "clock" || t.kind === "date") res.highlights.push({ start: t.start, end: t.end, kind: "number" });
       parser = new Parser(toks, this.registry, ctx);
       parser.decimals = this.settings.decimals;
       parser.fmt = (x) => this.number(x, this.settings.decimals);
+      parser.fmtValue = (v) => { try { return this.format(v); } catch { return String(v.num); } };
       const v = parser.parseLine();
       if (v) {
         res.value = v;
@@ -910,6 +1090,9 @@ export class Engine {
   }
 
   format(v) {
+    if (v.kind === "clock") return this.formatClock(v);
+    if (v.kind === "date") return this.formatDate(v.num);
+    if (v.format === "hms") return this.formatDuration(v.num);
     if (!isFinite(v.num)) throw new CalcError(Number.isNaN(v.num) ? tr("noResult") : tr("tooBig"));
     const suffix = v.unit ? (v.unit.id === "°" ? "°" : " " + v.unit.id) : "";
     if (v.format === "hex" || v.format === "bin" || v.format === "oct") {
@@ -922,7 +1105,36 @@ export class Engine {
     const dec = v.unit && v.unit.isCrypto ? Math.max(this.settings.decimals, 8) : this.settings.decimals;
     let s = this.number(v.num, dec);
     if (v.isPercent) s += "%";
+    if (v.unit && ["day", "week", "month", "year"].includes(v.unit.id) && Math.abs(v.num) !== 1) return s + suffix + "s";
     return s + suffix;
+  }
+
+  formatClock(v) {
+    const total = Math.round(v.num);
+    const dayOff = Math.floor(total / 86400), sec = total - dayOff * 86400;
+    const two = (n) => String(n).padStart(2, "0");
+    let s = `${two(Math.floor(sec / 3600))}:${two(Math.floor((sec % 3600) / 60))}`;
+    if (sec % 60) s += ":" + two(sec % 60);
+    if (v.tz) s += " " + v.tz.label;
+    if (dayOff) s += " " + tr("dayOff", (dayOff > 0 ? "+" : "−") + Math.abs(dayOff));
+    return s;
+  }
+  formatDate(days) {
+    const [y, m, d] = civilFromDays(days);
+    const two = (n) => String(n).padStart(2, "0");
+    const f = this.settings.dateFormat;
+    const s = f === "mdy" ? `${two(m)}/${two(d)}/${y}` : f === "ymd" ? `${y}-${two(m)}-${two(d)}` : `${two(d)}.${two(m)}.${y}`;
+    return s + ", " + tr("wd" + weekday(days));
+  }
+  formatDuration(sec) {
+    const sign = sec < 0 ? "-" : "";
+    let t = Math.round(Math.abs(sec));
+    const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+    const parts = [];
+    if (h) parts.push(`${h} h`);
+    if (m || (!h && !s)) parts.push(`${m} min`);
+    if (s) parts.push(`${s} s`);
+    return sign + parts.join(" ");
   }
 
   get groupSep() {

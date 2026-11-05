@@ -43,6 +43,11 @@ struct SettingsView: View {
                 }
                 Toggle(tr("trimZeros"), isOn: $s.trimZeros)
                 Text(tr("inputNote")).font(.caption).foregroundColor(.secondary)
+                Picker(tr("dateFormat"), selection: $s.dateFormat) {
+                    Text("31.12.2026").tag("dmy")
+                    Text("12/31/2026").tag("mdy")
+                    Text("2026-12-31").tag("ymd")
+                }
                 HStack {
                     Text(tr("example"))
                     Spacer()

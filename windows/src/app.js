@@ -42,7 +42,7 @@ let statusUntil = 0;
 const settings = {
   language: "", decimalSeparator: ".", groupingSeparator: ",", decimals: 2, trimZeros: true,
   fontFamily: "", fontSize: 15, hotkey: "Ctrl+Alt+C", useNBU: true, showHints: true,
-  alwaysOnTop: false, hideOnBlur: false,
+  alwaysOnTop: false, hideOnBlur: false, dateFormat: "dmy",
 };
 
 // ───────────────────────── Persistence ─────────────────────────
@@ -274,6 +274,7 @@ function welcomeLines() {
     "# Проценты", "20% от 1500", "1500 - 20%", "",
     "# Валюты (курсы обновляются сами)", "600 долларов в гривнах", "100 евро в грн", "0.01 btc в usd", "",
     "# Единицы измерения", "18 цельсия в фаренгейтах", "100 км в милях", "1 галлон в литрах", "70 кг в фунтах", "",
+    "# Время и даты", "18:15 - 9:40", "23:30 + 2 h", "15:00 Киев в LA", "сегодня + 30 дней", "31.12.2026 - сегодня", "",
     "# Числа в любом формате", "300 000,00 * 2", "300,000.00 * 2", "685,00 - ,99", "",
     "# Переменные и итоги", "цена = 1250", "цена * 3", "",
     "Аренда: 2000", "Свет: 150", "итого",
@@ -285,6 +286,7 @@ function welcomeLines() {
     "# Відсотки", "20% від 1500", "1500 - 20%", "",
     "# Валюти (курси оновлюються самі)", "600 доларів у гривнях", "100 євро у грн", "0.01 btc у usd", "",
     "# Одиниці виміру", "18 цельсія у фаренгейтах", "100 км у милях", "1 галон у літрах", "70 кг у фунтах", "",
+    "# Час і дати", "18:15 - 9:40", "23:30 + 2 h", "15:00 Київ у LA", "сьогодні + 30 днів", "31.12.2026 - сьогодні", "",
     "# Числа в будь-якому форматі", "300 000,00 * 2", "300,000.00 * 2", "685,00 - ,99", "",
     "# Змінні та підсумки", "ціна = 1250", "ціна * 3", "",
     "Оренда: 2000", "Світло: 150", "разом",
@@ -296,18 +298,22 @@ function welcomeLines() {
     "# Percentages", "20% of 1500", "1500 - 20%", "",
     "# Currencies (rates update automatically)", "600 usd in uah", "100 eur in usd", "0.01 btc in usd", "",
     "# Units", "18 celsius in fahrenheit", "100 km in miles", "1 gallon in liters", "70 kg in lb", "",
+    "# Time and dates", "18:15 - 9:40", "23:30 + 2 h", "15:00 Kyiv in LA", "today + 30 days", "12/31/2026 - today", "",
     "# Numbers in any format", "300 000,00 * 2", "300,000.00 * 2", "685,00 - ,99", "",
     "# Variables and totals", "price = 1250", "price * 3", "",
     "Rent: 2000", "Power: 150", "total",
   ];
 }
 
+// Lines that depend on today/now are not frozen with "= answer" (it would go stale).
+const RELATIVE = /(today|now|сегодня|сейчас|сьогодні|зараз|завтра|tomorrow|вчера|вчора|yesterday|\bдо\b|until|kyiv|київ|киев|\bla\b)/iu;
+
 function welcomeText() {
   const lines = welcomeLines();
   const res = engine.evaluate(lines);
   return lines.map((l, i) => {
     const t = l.trim();
-    if (!t || t.startsWith("#") || t.includes("=") || /^\p{L}+$/u.test(t) || !res[i].display) return l;
+    if (!t || t.startsWith("#") || t.includes("=") || /^\p{L}+$/u.test(t) || RELATIVE.test(t) || !res[i].display) return l;
     return `${l} = ${res[i].display}`;
   }).join("\n");
 }
@@ -349,6 +355,8 @@ function helpSections() {
     [tr("hUnits"), ru ? ["18 цельсия в фаренгейтах", "100 км в милях", "5 футов в см", "70 кг в фунтах", "1.5 часа в минутах", "1 GB в MB", "120 км / 1.5 ч", "10 соток в м2"]
       : uk ? ["18 цельсія у фаренгейтах", "100 км у милях", "5 футів у см", "70 кг у фунтах", "1.5 години у хвилинах", "1 GB у MB", "120 км / 1.5 години"]
       : ["18 celsius in fahrenheit", "100 km in miles", "5 ft in cm", "70 kg in lb", "1.5 hours in minutes", "1 GB in MB", "120 km / 1.5 h"]],
+    [tr("hTime"), ru ? ["12:30 + 1 h 15 min", "23:30 + 2 h", "18:15 - 9:40", "8 h 35 min в мин", "3pm + 30 min", "сейчас", "сейчас в Киеве", "15:00 Киев в LA"] : uk ? ["12:30 + 1 h 15 min", "23:30 + 2 h", "18:15 - 9:40", "8 h 35 min у хв", "3pm + 30 min", "зараз", "зараз у Києві", "15:00 Київ у LA"] : ["12:30 + 1 h 15 min", "23:30 + 2 h", "18:15 - 9:40", "8 h 35 min in min", "3pm + 30 min", "now", "now in Kyiv", "15:00 Kyiv in LA"]],
+    [tr("hDates"), ru ? ["сегодня + 30 дней", "12.12.2026 + 2 недели", "31.01.2027 + 1 месяц", "31.12.2026 - сегодня", "до 31.12", "до 31.12 в неделях", "12 декабря 2026"] : uk ? ["сьогодні + 30 днів", "12.12.2026 + 2 тижні", "31.01.2027 + 1 місяць", "31.12.2026 - сьогодні", "до 31.12", "до 31.12 у тижнях", "12 грудня 2026"] : ["today + 30 days", "12/12/2026 + 2 weeks", "01/31/2027 + 1 month", "12/31/2026 - today", "12/31/2026 - today in weeks", "December 12, 2026"]],
     [tr("hBases"), [`255 ${conv} hex`, "0xFF + 1", `10 ${conv} bin`, ru ? "5k + 2.5 млн" : uk ? "5k + 2.5 мільйон" : "5k + 2.5 million", `1234567 ${conv} sci`]],
     [tr("hVars"), ru ? ["цена = 1250", "кол = 3", "цена * кол", "пред + 100"] : uk ? ["ціна = 1250", "кількість = 3", "ціна * кількість", "попер + 100"] : ["price = 1250", "qty = 3", "price * qty", "prev + 100"]],
     [tr("hTotals"), ru ? ["Аренда: 2000", "Свет: 150", "Интернет: 30", "итого"] : uk ? ["Оренда: 2000", "Світло: 150", "Інтернет: 30", "разом"] : ["Rent: 2000", "Power: 150", "Internet: 30", "total"]],
@@ -446,6 +454,7 @@ function renderSettings(body) {
       ${opt("", tr("gNone"), s.groupingSeparator)}${opt(" ", tr("gSpace"), s.groupingSeparator)}${opt(",", tr("gComma"), s.groupingSeparator)}${opt(".", tr("gDot"), s.groupingSeparator)}${opt("'", tr("gApos"), s.groupingSeparator)}</select></div>
     <div class="row"><label>${esc(tr("decimalsW"))}</label><input type="number" id="sDecimals" min="0" max="10" value="${s.decimals}"></div>
     ${chk("sTrim", tr("trimZeros"), s.trimZeros)}
+    <div class="row"><label>${esc(tr("dateFormat"))}</label><select id="sDate">${opt("dmy", "31.12.2026", s.dateFormat || "dmy")}${opt("mdy", "12/31/2026", s.dateFormat || "dmy")}${opt("ymd", "2026-12-31", s.dateFormat || "dmy")}</select></div>
     <p class="muted">${esc(tr("inputNote"))}</p>
     <div class="row"><label>${esc(tr("example"))}</label><span id="sPreview" style="color:var(--res);font-family:var(--font)"></span></div>
     <div class="group">${esc(tr("font"))}</div>
@@ -466,6 +475,7 @@ function renderSettings(body) {
   $("sGroup").onchange = (e) => { s.groupingSeparator = e.target.value; if (s.groupingSeparator === s.decimalSeparator) { s.groupingSeparator = s.decimalSeparator === "," ? " " : ","; e.target.value = s.groupingSeparator; } changed(); };
   $("sDecimals").oninput = (e) => { s.decimals = Math.max(0, Math.min(10, parseInt(e.target.value) || 0)); changed(); };
   $("sTrim").onchange = (e) => { s.trimZeros = e.target.checked; changed(); };
+  $("sDate").onchange = (e) => { s.dateFormat = e.target.value; changed(); };
   $("sFont").oninput = (e) => { s.fontFamily = e.target.value.trim(); changed(); };
   $("sSize").oninput = (e) => { s.fontSize = Math.max(10, Math.min(40, parseInt(e.target.value) || 15)); changed(); };
   $("sTop").onchange = (e) => { s.alwaysOnTop = e.target.checked; P.setAlwaysOnTop(s.alwaysOnTop); saveSettings(); };
@@ -510,7 +520,7 @@ function applySettings() {
   document.documentElement.lang = L10n.lang;
   engine.settings = {
     decimalSeparator: settings.decimalSeparator, groupingSeparator: settings.groupingSeparator,
-    decimals: settings.decimals, trimZeros: settings.trimZeros,
+    decimals: settings.decimals, trimZeros: settings.trimZeros, dateFormat: settings.dateFormat || "dmy",
   };
   const root = document.documentElement.style;
   root.setProperty("--size", settings.fontSize + "px");

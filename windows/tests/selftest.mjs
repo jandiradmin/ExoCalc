@@ -374,7 +374,17 @@ for (const [expr, warn] of [["88+1=890+1", true], ["88+1=89+1", false], ["1/3=0.
 const sheet = ["a = 10", "b = 5", "a * b", "", "x: 100", "y: 50", "sum", "prev * 2", "# заголовок", "avg"];
 const wantSheet = ["10", "5", "50", null, "100", "50", "150", "300", null, "0"];
 e.evaluate(sheet).forEach((r, i) => { count++; if (r.display !== wantSheet[i]) { ok = false; console.log(`✗ sheet «${sheet[i]}»: want ${wantSheet[i]} got ${r.display ?? r.error}`); } });
-e.settings = { decimalSeparator: ",", groupingSeparator: " ", decimals: 2, trimZeros: true };
+// Dates and times with a fixed "now": 4 Nov 2026 21:30 in Los Angeles
+const dt = new Engine(rates);
+dt.now = () => new Date(1793856600 * 1000);
+dt.timeZone = "America/Los_Angeles";
+for (const [expr, want] of [["12:01 + 1 h", "13:01"], ["12:01:30 + 45 sec", "12:02:15"], ["23:30 + 2 h", "01:30 (+1 дн)"], ["18:15 - 9:40", "8 h 35 min"], ["9:40 - 18:15", "-8 h 35 min"], ["1:30 * 3", "04:30"], ["8 h 35 min in min", "515 min"], ["1:30 in min", "90 min"], ["15:00 Kyiv in LA", "05:00 LA"], ["12:00 UTC in Tokyo", "21:00 Tokyo"], ["now", "21:30"], ["now in Kyiv", "07:30 Kyiv (+1 дн)"], ["3pm + 30 min", "15:30"], ["11:30 pm + 1 h", "00:30 (+1 дн)"], ["12.12.2026 + 10 days", "22.12.2026, вторник"], ["2026-12-12", "12.12.2026, суббота"], ["12/31/2026", "31.12.2026, четверг"], ["12 декабря 2026", "12.12.2026, суббота"], ["December 12, 2026", "12.12.2026, суббота"], ["сегодня", "04.11.2026, среда"], ["завтра + 30 дней", "05.12.2026, суббота"], ["31.12.2026 - сегодня", "57 days"], ["31.12.2026 - today in weeks", "8.14 weeks"], ["до 31.12", "57 days"], ["31.01.2027 + 1 month", "28.02.2027, воскресенье"], ["14:00 Kyiv in Нью Йорк", "07:00 New York"], ["сьогодні + 2 тижні", "18.11.2026, среда"], ["1 day 2 h in h", "26 h"], ["23:30 + 2 h = 01:30 (+1 дн)", "01:30 (+1 дн)"], ["12:01 + 1", "ERR"], ["12.12.2026 + 1", "ERR"], ["12.13.2026", "ERR"], ["1.234.567", "1,234,567"]]) {
+  count++;
+  const r = dt.evaluateOne(expr);
+  const got = r.display ?? "ERR";
+  if (got !== want) { ok = false; console.log(`✗ [date] ${expr}\n    want: ${want}\n    got:  ${r.display ?? "ERR " + r.error}`); }
+}
+e.settings = { decimalSeparator: ",", groupingSeparator: " ", decimals: 2, trimZeros: true, dateFormat: "dmy" };
 for (const [expr, want] of [["1 234,5 + 0,5", "1 235"], ["2,5 * 2", "5"], ["10/3", "3,33"], ["max(1; 2)", "2"], ["1.500", "1 500"], ["300,000.00*2", "600 000"]]) {
   count++;
   const r = e.evaluateOne(expr);

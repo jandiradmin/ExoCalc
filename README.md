@@ -19,6 +19,7 @@ ExoCalc is a minimalist notepad calculator for macOS and Windows. Type calculati
 - **Percentages:** `100 + 15%`, `15% of 800`, `20% off 1500`
 - **Currencies:** `600 usd in uah`, `$20 + €15`, `0.05 btc in usd`. About 160 currencies plus BTC, ETH, USDT, SOL, TON and more; hryvnia at the official NBU rate (optional); rates cached for offline use
 - **Units:** length, area, volume, mass, time, temperature, data, speed, angle, energy, power, pressure, frequency: `18 celsius in fahrenheit`, `100 km in miles`
+- **Time and dates:** `18:15 - 9:40` → `8 h 35 min`, `23:30 + 2 h` → `01:30 (+1 d)`, `15:00 Kyiv in LA`, `now in Kyiv`, `today + 30 days`, `12/31/2026 - today in weeks`, `31.01.2027 + 1 month`
 - **Functions:** `sqrt round floor ceil sin cos tan ln log min max avg sum`, constants `pi e`
 - **Variables and totals:** `price = 1250`, `prev`, `total`, `avg`, labels `Rent: 2000`, comments `#` and `//`
 - **Number bases:** `hex`, `bin`, `oct`, `sci`
@@ -64,6 +65,7 @@ ExoCalc — мінімалістичний калькулятор-блокнот
 - **Відсотки:** `100 + 15%`, `15% від 800`, `20% off 1500`
 - **Валюти:** `600 доларів у гривнях`, `$20 + €15`, `0.05 btc у usd`. Близько 160 валют плюс BTC, ETH, USDT, SOL, TON та інші; гривня за офіційним курсом НБУ (вмикається); курси зберігаються для роботи офлайн
 - **Одиниці:** довжина, площа, об’єм, маса, час, температура, дані, швидкість, кути, енергія, потужність, тиск, частота: `18 цельсія у фаренгейтах`, `100 км у милях`
+- **Час і дати:** `18:15 - 9:40` → `8 h 35 min`, `23:30 + 2 h` → `01:30 (+1 d)`, `15:00 Kyiv in LA`, `now in Kyiv`, `today + 30 days`, `12/31/2026 - today in weeks`, `31.01.2027 + 1 month`
 - **Функції:** `sqrt round floor ceil sin cos tan ln log min max avg sum`, константи `pi e`
 - **Змінні й підсумки:** `ціна = 1250`, `попер`, `разом`, `середнє`, підписи `Оренда: 2000`, коментарі `#` і `//`
 - **Системи числення:** `hex`, `bin`, `oct`, `sci`
@@ -109,6 +111,7 @@ ExoCalc — минималистичный калькулятор-блокнот
 - **Проценты:** `100 + 15%`, `15% от 800`, `20% off 1500`
 - **Валюты:** `600 долларов в гривнах`, `$20 + €15`, `0.05 btc в usd`. Около 160 валют плюс BTC, ETH, USDT, SOL, TON и другие; гривна по официальному курсу НБУ (включается); курсы сохраняются для работы офлайн
 - **Единицы:** длина, площадь, объём, масса, время, температура, данные, скорость, углы, энергия, мощность, давление, частота: `18 цельсия в фаренгейтах`, `100 км в милях`
+- **Время и даты:** `18:15 - 9:40` → `8 h 35 min`, `23:30 + 2 h` → `01:30 (+1 d)`, `15:00 Kyiv in LA`, `now in Kyiv`, `today + 30 days`, `12/31/2026 - today in weeks`, `31.01.2027 + 1 month`
 - **Функции:** `sqrt round floor ceil sin cos tan ln log min max avg sum`, константы `pi e`
 - **Переменные и итоги:** `цена = 1250`, `пред`, `итого`, `среднее`, подписи `Аренда: 2000`, комментарии `#` и `//`
 - **Системы счисления:** `hex`, `bin`, `oct`, `sci`

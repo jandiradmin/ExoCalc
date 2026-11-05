@@ -19,6 +19,7 @@ final class AppSettings: ObservableObject {
     @Published var showHints: Bool { didSet { d.set(showHints, forKey: "showHints") } }
     @Published var hideOnDeactivate: Bool { didSet { d.set(hideOnDeactivate, forKey: "hideOnDeactivate") } }
     @Published var alwaysOnTop: Bool { didSet { d.set(alwaysOnTop, forKey: "alwaysOnTop") } }
+    @Published var dateFormat: String { didSet { d.set(dateFormat, forKey: "dateFormat") } }
     @Published var language: String { didSet { d.set(language, forKey: "language"); L10n.lang = L10n.resolve(language) } }
     @Published var showInDock: Bool { didSet { d.set(showInDock, forKey: "showInDock") } }
     @Published var showInMenuBar: Bool { didSet { d.set(showInMenuBar, forKey: "showInMenuBar") } }
@@ -31,7 +32,7 @@ final class AppSettings: ObservableObject {
             "decimalSeparator": ".", "groupingSeparator": ",", "decimals": 2, "trimZeros": true,
             "fontName": "", "fontSize": 15.0,
             "hotKeyCode": kVK_ANSI_Equal, "hotKeyMods": controlKey | optionKey,
-            "language": "", "showInDock": true, "showInMenuBar": true,
+            "language": "", "showInDock": true, "showInMenuBar": true, "dateFormat": "dmy",
             "useNBU": true, "showHints": true, "hideOnDeactivate": false, "alwaysOnTop": false,
         ])
         decimalSeparator = d.string(forKey: "decimalSeparator") ?? "."
@@ -46,6 +47,7 @@ final class AppSettings: ObservableObject {
         showHints = d.bool(forKey: "showHints")
         hideOnDeactivate = d.bool(forKey: "hideOnDeactivate")
         alwaysOnTop = d.bool(forKey: "alwaysOnTop")
+        dateFormat = d.string(forKey: "dateFormat") ?? "dmy"
         language = d.string(forKey: "language") ?? ""
         showInDock = d.bool(forKey: "showInDock")
         showInMenuBar = d.bool(forKey: "showInMenuBar")
@@ -70,6 +72,7 @@ final class AppSettings: ObservableObject {
         s.groupingSeparator = groupingSeparator
         s.decimals = max(0, min(10, decimals))
         s.trimZeros = trimZeros
+        s.dateFormat = dateFormat
         return s
     }
 

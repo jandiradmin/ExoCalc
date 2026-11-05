@@ -1,7 +1,7 @@
 import Foundation
 
 struct Token {
-    enum Kind { case num, ident, op, lparen, rparen, sep, eof }
+    enum Kind { case num, ident, op, lparen, rparen, sep, eof, clock, date }
     var kind: Kind
     var text: String
     var num: Double = 0
@@ -71,6 +71,11 @@ struct Lexer {
                 return p.kind == .op || p.kind == .lparen || p.kind == .sep
             }()
             let leadingSep = (c == 44 || c == 46) && i + 1 < n && Lexer.isDigit(s[i + 1]) && prevAllowsLeadingSep
+            if Lexer.isDigit(c), let dt = try lexDateTime(i) {
+                push(dt.kind, str(i, dt.end), i, dt.end, num: dt.num)
+                i = dt.end
+                continue
+            }
             if Lexer.isDigit(c) || leadingSep {
                 let (v, e) = try lexNumber(i)
                 push(.num, str(i, e), i, e, num: v)
@@ -137,6 +142,50 @@ struct Lexer {
 
     private func ascii(_ c: UInt16) -> Character {
         Character(Unicode.Scalar(UInt8(truncatingIfNeeded: c)))
+    }
+
+    /// Reads 1...maxLen digits at i; returns value and end index.
+    private func digits(_ i: Int, _ minLen: Int, _ maxLen: Int) -> (Int, Int)? {
+        var j = i
+        var v = 0
+        while j < s.count && j - i < maxLen && Lexer.isDigit(s[j]) {
+            v = v * 10 + Int(s[j]) - 48
+            j += 1
+        }
+        if j - i < minLen || (j < s.count && Lexer.isDigit(s[j])) { return nil }
+        return (v, j)
+    }
+
+    private func at(_ j: Int) -> UInt16 { j < s.count ? s[j] : 0 }
+
+    /// 23:30, 23:30:15, 12.12.2026, 2026-12-12, 12/31/2026 (US order).
+    private func lexDateTime(_ i: Int) throws -> (kind: Token.Kind, num: Double, end: Int)? {
+        // clock
+        if let (h, e1) = digits(i, 1, 2), at(e1) == 58, let (mi, e2) = digits(e1 + 1, 2, 2) {
+            var sec = 0
+            var end = e2
+            if at(e2) == 58, let (se, e3) = digits(e2 + 1, 2, 2) { sec = se; end = e3 }
+            if at(end) != 58 && h <= 24 && mi < 60 && sec < 60 {
+                return (.clock, Double(h * 3600 + mi * 60 + sec), end)
+            }
+        }
+        // 12.12.2026
+        if let (d, e1) = digits(i, 1, 2), at(e1) == 46, let (m, e2) = digits(e1 + 1, 1, 2), at(e2) == 46,
+           let (y, e3) = digits(e2 + 1, 4, 4), at(e3) != 46 {
+            guard DT.valid(y, m, d) else { throw CalcError(tr("badDate")) }
+            return (.date, Double(DT.daysFromCivil(y, m, d)), e3)
+        }
+        // 2026-12-12
+        if let (y, e1) = digits(i, 4, 4), at(e1) == 45, let (m, e2) = digits(e1 + 1, 1, 2), at(e2) == 45,
+           let (d, e3) = digits(e2 + 1, 1, 2), DT.valid(y, m, d) {
+            return (.date, Double(DT.daysFromCivil(y, m, d)), e3)
+        }
+        // 12/31/2026
+        if let (m, e1) = digits(i, 1, 2), at(e1) == 47, let (d, e2) = digits(e1 + 1, 1, 2), at(e2) == 47,
+           let (y, e3) = digits(e2 + 1, 4, 4), DT.valid(y, m, d) {
+            return (.date, Double(DT.daysFromCivil(y, m, d)), e3)
+        }
+        return nil
     }
 
     private func lexNumber(_ start: Int) throws -> (Double, Int) {

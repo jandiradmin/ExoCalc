@@ -4,6 +4,10 @@ final class Context {
     var vars: [String: Value] = [:]
     var prev: Value?
     var block: [Value] = []
+    var now = Date()
+    var localTZ = TimeZone.current.identifier
+    var today = 0
+    var nowSec = 0.0
 }
 
 /// Recursive-descent parser that evaluates while parsing.
@@ -16,6 +20,7 @@ final class Parser {
     var warnings: [String] = []
     /// Formats a number for messages; set by the engine.
     var fmt: (Double) -> String = { String($0) }
+    var fmtValue: (Value) -> String = { String($0.num) }
     /// Decimal places shown to the user (for comparing typed numbers).
     var decimals = 2
     private var override: (index: Int, value: Double)?
@@ -154,12 +159,29 @@ final class Parser {
             var j = i
             while t[j].kind != .eof && !isOp(t[j], "=") { j += 1 }
             if j == i { continue }
-            let isNote = t[j].kind == .eof && t[i..<j].allSatisfy { $0.kind == .num || $0.kind == .ident }
-                && t[i].kind == .num
+            var isNote = t[j].kind == .eof && [.num, .clock, .date].contains(t[i].kind)
             if isNote {
-                if !v.isPercent && !matches(t[i].num, v.num) {
+                for k in i..<j {
+                    let x = t[k]
+                    let ok = [.num, .ident, .clock, .date, .sep, .lparen, .rparen].contains(x.kind)
+                        || (x.kind == .op && (x.text == "+" || x.text == "-") && k > i && t[k - 1].kind == .lparen)
+                    if !ok { isNote = false; break }
+                }
+            }
+            if isNote {
+                let first = t[i]
+                let differs: Bool
+                if first.kind == .num {
+                    differs = v.kind == .plain && !v.isPercent && v.format != .hms && !matches(first.num, v.num)
+                } else if (first.kind == .clock && v.kind == .clock) || (first.kind == .date && v.kind == .date) {
+                    differs = v.kind == .date ? first.num != v.num
+                        : (Int(first.num.rounded()) - Int(v.num.rounded())) % 86400 != 0
+                } else {
+                    differs = true
+                }
+                if differs {
                     let text = t[i..<j].map { $0.text }.joined(separator: " ")
-                    warnings.append(tr("noteFix", text, fmt(v.num)))
+                    warnings.append(tr("noteFix", text, fmtValue(v)))
                     marks.append(Highlight(start: t[i].start, end: t[j - 1].end, kind: .error))
                 }
                 i = j
@@ -171,7 +193,7 @@ final class Parser {
                 // The link should start with the previous answer; if the typed number differs,
                 // continue from the real answer and flag the number.
                 // Always continue from the exact answer (the text may show it rounded).
-                if cur.kind == .num && !v.isPercent {
+                if cur.kind == .num && !v.isPercent && v.kind == .plain {
                     if !matches(cur.num, v.num) {
                         warnings.append(tr("chainFix", cur.text, fmt(v.num)))
                         marks.append(Highlight(start: cur.start, end: cur.end, kind: .error))
@@ -226,6 +248,13 @@ final class Parser {
                     mark(i, j, .keyword)
                     i = j + 1
                     v.format = f
+                    continue
+                }
+                if v.kind == .clock, let z = matchZone(at: j) {
+                    mark(i, i, .keyword)
+                    mark(j, j + z.1 - 1, .unit)
+                    i = j + z.1
+                    v = toZone(v, z.0)
                     continue
                 }
                 guard let m = matchUnit(at: j) else {
@@ -352,7 +381,8 @@ final class Parser {
             }
             break
         }
-        if v.unit == nil && !v.isPercent {
+        v = try dateTimePostfix(v)
+        if v.kind == .plain && v.unit == nil && !v.isPercent {
             if cur.kind == .ident, let sc = Parser.scales[cur.text] {
                 mark(i, i, .keyword)
                 i += 1
@@ -368,6 +398,7 @@ final class Parser {
                     mark(i, i + m.1 - 1, .unit)
                     i += m.1
                     v.unit = m.0
+                    v = try compoundUnits(v)
                 }
             }
         }
@@ -382,6 +413,12 @@ final class Parser {
     private func parsePrimary() throws -> Value {
         let tok = cur
         switch tok.kind {
+        case .clock:
+            i += 1
+            return Value.clock(tok.num)
+        case .date:
+            i += 1
+            return Value.date(Int(tok.num))
         case .num:
             if let o = override, o.index == i {
                 i += 1
@@ -416,6 +453,34 @@ final class Parser {
             mark(i, i, .variable)
             i += 1
             return v
+        }
+        if let off = DT.dayWords[low] {
+            mark(i, i, .keyword)
+            i += 1
+            return Value.date(ctx.today + off)
+        }
+        if DT.nowWords.contains(low) {
+            mark(i, i, .keyword)
+            i += 1
+            return Value.clock(ctx.nowSec)
+        }
+        if DT.untilWords.contains(low), at(i + 1).kind == .date || at(i + 1).kind == .num {
+            mark(i, i, .keyword)
+            i += 1
+            let target = try upcomingDate()
+            return Value(Double(target - ctx.today), unit: reg.lookup("day"))
+        }
+        if let month = DT.months[low], at(i + 1).kind == .num {
+            // "December 12, 2026"
+            mark(i, i, .unit)
+            i += 1
+            let day = cur.num
+            i += 1
+            if cur.kind == .sep { i += 1 }
+            var year = DT.civilFromDays(ctx.today).0
+            if cur.kind == .num, cur.num == cur.num.rounded(), cur.num >= 1000 { year = Int(cur.num); i += 1 }
+            guard day == day.rounded(), DT.valid(year, month, Int(day)) else { throw CalcError(tr("badDate")) }
+            return Value.date(DT.daysFromCivil(year, month, Int(day)))
         }
 
         if let f = Parser.funcAliases[low] {
@@ -504,7 +569,132 @@ final class Parser {
 
     // MARK: - Arithmetic
 
+    // MARK: - Dates and times
+
+    private func dateTimePostfix(_ input: Value) throws -> Value {
+        var v = input
+        func low() -> String { cur.kind == .ident ? cur.text.lowercased() : "" }
+        // "12 December 2026", "12 декабря"
+        if v.isPlainNumber, v.num == v.num.rounded(), v.num >= 1, v.num <= 31, let month = DT.months[low()] {
+            mark(i, i, .unit)
+            i += 1
+            var year = DT.civilFromDays(ctx.today).0
+            if cur.kind == .num, cur.num == cur.num.rounded(), cur.num >= 1000, cur.num <= 9999 { year = Int(cur.num); i += 1 }
+            guard DT.valid(year, month, Int(v.num)) else { throw CalcError(tr("badDate")) }
+            return Value.date(DT.daysFromCivil(year, month, Int(v.num)))
+        }
+        // "3pm", "11 am"
+        if v.isPlainNumber, v.num == v.num.rounded(), v.num >= 1, v.num <= 12, low() == "am" || low() == "pm" {
+            v = Value.clock(v.num * 3600)
+        }
+        if v.kind == .clock {
+            if low() == "am" || low() == "pm" {
+                let h = Int(v.num / 3600)
+                let rest = v.num - Double(h * 3600)
+                let h24 = low() == "pm" ? h % 12 + 12 : h % 12
+                mark(i, i, .unit)
+                i += 1
+                v = Value.clock(Double(h24 * 3600) + rest, v.tz)
+            }
+            if v.tz == nil && !isConvWord(cur), let z = matchZone(at: i) {
+                mark(i, i + z.1 - 1, .unit)
+                i += z.1
+                v = Value.clock(v.num, z.0)
+            }
+        }
+        return v
+    }
+
+    /// "8 h 35 min", "1 day 2 h": add following number+unit of the same kind.
+    private func compoundUnits(_ input: Value) throws -> Value {
+        var v = input
+        while cur.kind == .num, let u = v.unit, [UnitDim.time, .length, .mass].contains(u.dim) {
+            guard let m = matchUnit(at: i + 1), m.0.dim == u.dim,
+                  !Parser.convWords.contains(at(i + 1).text.lowercased()) else { break }
+            let n = cur.num
+            mark(i + 1, i + m.1, .unit)
+            i += 1 + m.1
+            v = try addSub(v, Value(n, unit: m.0), false)
+        }
+        return v
+    }
+
+    private func matchZone(at j: Int) -> (CalcZone, Int)? {
+        guard at(j).kind == .ident else { return nil }
+        for n in [2, 1] where j + n <= t.count {
+            let toks = t[j..<(j + n)]
+            if toks.contains(where: { $0.kind != .ident }) { continue }
+            let key = toks.map { $0.text }.joined(separator: " ").lowercased()
+            if let z = DT.zones[key] { return (z, n) }
+        }
+        return nil
+    }
+
+    private func zoneOffset(_ z: CalcZone?) -> Double {
+        Double(DT.offset(z?.id ?? ctx.localTZ, at: ctx.now))
+    }
+
+    private func toZone(_ v: Value, _ z: CalcZone?) -> Value {
+        Value.clock(v.num + zoneOffset(z) - zoneOffset(v.tz), z)
+    }
+
+    private func upcomingDate() throws -> Int {
+        let tok = cur
+        if tok.kind == .date { i += 1; return Int(tok.num) }
+        let parts = tok.text.split(whereSeparator: { $0 == "." || $0 == "," })
+        guard parts.count == 2, let d = Int(parts[0]), let m = Int(parts[1]) else { throw CalcError(tr("badDate")) }
+        i += 1
+        var y = DT.civilFromDays(ctx.today).0
+        guard DT.valid(y, m, d) else { throw CalcError(tr("badDate")) }
+        if DT.daysFromCivil(y, m, d) < ctx.today { y += 1 }
+        return DT.daysFromCivil(y, m, d)
+    }
+
+    private func addSubDT(_ a: Value, _ b: Value, _ sub: Bool) throws -> Value {
+        let sign: Double = sub ? -1 : 1
+        if a.isPercent || b.isPercent { throw CalcError(tr("dateOp")) }
+        guard let secUnit = reg.lookup("s"), let dayUnit = reg.lookup("day") else { throw CalcError(tr("dateOp")) }
+        if a.kind == .clock, b.isDuration, let bu = b.unit {
+            return Value.clock(a.num + sign * (try reg.convert(b.num, bu, secUnit)), a.tz)
+        }
+        if b.kind == .clock, a.isDuration, !sub, let au = a.unit {
+            return Value.clock(b.num + (try reg.convert(a.num, au, secUnit)), b.tz)
+        }
+        if a.kind == .clock && b.kind == .clock && sub {
+            let bInA = (a.tz != nil || b.tz != nil) ? toZone(b, a.tz).num : b.num
+            return Value(a.num - bInA, unit: secUnit, format: .hms)
+        }
+        if a.kind == .clock && b.isPlainNumber { throw CalcError(tr("timeNeedsUnit")) }
+        if a.kind == .date, b.isDuration, let bu = b.unit {
+            return Value.date(try shiftDate(Int(a.num), sign * b.num, bu))
+        }
+        if b.kind == .date, a.isDuration, !sub, let au = a.unit {
+            return Value.date(try shiftDate(Int(b.num), a.num, au))
+        }
+        if a.kind == .date && b.kind == .date && sub {
+            return Value(a.num - b.num, unit: dayUnit)
+        }
+        if a.kind == .date && b.isPlainNumber { throw CalcError(tr("dateNeedsUnit")) }
+        throw CalcError(tr("dateOp"))
+    }
+
+    private func shiftDate(_ days: Int, _ n: Double, _ unit: CalcUnit) throws -> Int {
+        if unit.id == "month" || unit.id == "year" {
+            let months = n * (unit.id == "year" ? 12 : 1)
+            guard Swift.abs(months - months.rounded()) < 1e-9 else { throw CalcError(tr("dateWholeDays")) }
+            return DT.addMonths(days, Int(months.rounded()))
+        }
+        guard let dayUnit = reg.lookup("day") else { throw CalcError(tr("dateOp")) }
+        let d = try reg.convert(n, unit, dayUnit)
+        guard Swift.abs(d - d.rounded()) < 1e-9 else { throw CalcError(tr("dateWholeDays")) }
+        return days + Int(d.rounded())
+    }
+
     private func convert(_ v: Value, to u: CalcUnit) throws -> Value {
+        if v.kind == .clock && u.dim == .time, let secUnit = reg.lookup("s") {
+            return Value(try reg.convert(v.num, secUnit, u), unit: u)
+        }
+        if v.kind != .plain { throw CalcError(tr("dateOp")) }
         if v.isPercent { throw CalcError(tr("pctConvert", u.id)) }
         var r = v
         r.format = .dec
@@ -516,6 +706,7 @@ final class Parser {
     }
 
     private func addSub(_ a: Value, _ b: Value, _ sub: Bool) throws -> Value {
+        if a.kind != .plain || b.kind != .plain { return try addSubDT(a, b, sub) }
         let sign: Double = sub ? -1 : 1
         if b.isPercent && !a.isPercent {
             var r = a
@@ -538,6 +729,9 @@ final class Parser {
     }
 
     private func mul(_ a: Value, _ b: Value) throws -> Value {
+        if a.kind == .clock && b.isPlainNumber { return Value.clock(a.num * b.num, a.tz) }
+        if b.kind == .clock && a.isPlainNumber { return Value.clock(a.num * b.num, b.tz) }
+        if a.kind != .plain || b.kind != .plain { throw CalcError(tr("dateOp")) }
         if a.isPercent && b.isPercent { return Value(a.num * b.num / 100, percent: true) }
         if b.isPercent { var r = a; r.num = a.num * b.num / 100; return r }
         if a.isPercent { var r = b; r.num = b.num * a.num / 100; return r }
@@ -559,6 +753,8 @@ final class Parser {
 
     private func div(_ a: Value, _ b: Value) throws -> Value {
         if b.num == 0 { throw CalcError(tr("divZero")) }
+        if a.kind == .clock && b.isPlainNumber { return Value.clock(a.num / b.num, a.tz) }
+        if a.kind != .plain || b.kind != .plain { throw CalcError(tr("dateOp")) }
         if a.isPercent && b.isPercent { return Value(a.num / b.num) }
         if b.isPercent { var r = a; r.num = a.num / (b.num / 100); return r }
         if a.isPercent { return Value(a.num / b.num, percent: true) }
