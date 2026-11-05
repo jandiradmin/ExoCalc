@@ -30,7 +30,7 @@ final class AppSettings: ObservableObject {
         d.register(defaults: [
             "decimalSeparator": ".", "groupingSeparator": ",", "decimals": 2, "trimZeros": true,
             "fontName": "", "fontSize": 15.0,
-            "hotKeyCode": kVK_ANSI_C, "hotKeyMods": controlKey | optionKey,
+            "hotKeyCode": kVK_ANSI_Equal, "hotKeyMods": controlKey | optionKey,
             "language": "", "showInDock": true, "showInMenuBar": true,
             "useNBU": true, "showHints": true, "hideOnDeactivate": false, "alwaysOnTop": false,
         ])
@@ -49,9 +49,10 @@ final class AppSettings: ObservableObject {
         language = d.string(forKey: "language") ?? ""
         showInDock = d.bool(forKey: "showInDock")
         showInMenuBar = d.bool(forKey: "showInMenuBar")
-        // Old default ⌥⌘= clashes with macOS Zoom — move to ⌃⌥C.
-        if hotKeyCode == kVK_ANSI_Equal && hotKeyMods == (cmdKey | optionKey) {
-            hotKeyCode = kVK_ANSI_C
+        // Old defaults clash: ⌥⌘= is macOS Zoom, ⌃⌥C is ExoKey's spell fix — move to ⌃⌥=.
+        if (hotKeyCode == kVK_ANSI_Equal && hotKeyMods == (cmdKey | optionKey))
+            || (hotKeyCode == kVK_ANSI_C && hotKeyMods == (controlKey | optionKey)) {
+            hotKeyCode = kVK_ANSI_Equal
             hotKeyMods = controlKey | optionKey
         }
         L10n.lang = L10n.resolve(language)

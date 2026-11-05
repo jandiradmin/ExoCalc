@@ -22,7 +22,7 @@ ExoCalc is a minimalist notepad calculator for macOS and Windows. Type calculati
 - **Functions:** `sqrt round floor ceil sin cos tan ln log min max avg sum`, constants `pi e`
 - **Variables and totals:** `price = 1250`, `prev`, `total`, `avg`, labels `Rent: 2000`, comments `#` and `//`
 - **Number bases:** `hex`, `bin`, `oct`, `sci`
-- **Always at hand:** runs in the background with a global hotkey (default ⌃⌥C), in the Dock and the menu bar
+- **Always at hand:** runs in the background with a global hotkey (default ⌃⌥=), in the Dock and the menu bar
 - **Memory:** the sheet is saved automatically, and searchable history opens with ⌘Y
 - **Copying:** click a result to copy it; ⇧-click or ⇧⌘C copies “expression = result”, ⌥⌘C copies the whole sheet
 - **Help:** F1 opens help with live examples, F5 autocompletes
@@ -67,7 +67,7 @@ ExoCalc — мінімалістичний калькулятор-блокнот
 - **Функції:** `sqrt round floor ceil sin cos tan ln log min max avg sum`, константи `pi e`
 - **Змінні й підсумки:** `ціна = 1250`, `попер`, `разом`, `середнє`, підписи `Оренда: 2000`, коментарі `#` і `//`
 - **Системи числення:** `hex`, `bin`, `oct`, `sci`
-- **Завжди під рукою:** працює у фоні, глобальна гаряча клавіша (за замовчуванням ⌃⌥C), значок у Dock і рядку меню
+- **Завжди під рукою:** працює у фоні, глобальна гаряча клавіша (за замовчуванням ⌃⌥=), значок у Dock і рядку меню
 - **Пам’ять:** аркуш зберігається автоматично, історія з пошуком відкривається через ⌘Y
 - **Копіювання:** клік по результату копіює його; ⇧-клік або ⇧⌘C — «вираз = результат», ⌥⌘C — весь аркуш
 - **Довідка:** F1 — довідка з живими прикладами, F5 — автодоповнення
@@ -112,7 +112,7 @@ ExoCalc — минималистичный калькулятор-блокнот
 - **Функции:** `sqrt round floor ceil sin cos tan ln log min max avg sum`, константы `pi e`
 - **Переменные и итоги:** `цена = 1250`, `пред`, `итого`, `среднее`, подписи `Аренда: 2000`, комментарии `#` и `//`
 - **Системы счисления:** `hex`, `bin`, `oct`, `sci`
-- **Всегда под рукой:** работает в фоне, глобальная горячая клавиша (по умолчанию ⌃⌥C), значок в Dock и строке меню
+- **Всегда под рукой:** работает в фоне, глобальная горячая клавиша (по умолчанию ⌃⌥=), значок в Dock и строке меню
 - **Память:** лист сохраняется автоматически, история с поиском открывается по ⌘Y
 - **Копирование:** клик по результату копирует его; ⇧-клик или ⇧⌘C — «выражение = результат», ⌥⌘C — весь лист
 - **Справка:** F1 — справка с живыми примерами, F5 — автодополнение
