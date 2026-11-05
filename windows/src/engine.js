@@ -439,17 +439,31 @@ class Parser {
       this.ctx.vars.set(name, v);
       return v;
     }
-    const v = this.parseConversion();
+    let v = this.parseConversion();
+    // Chains: "88+1=89+1=90+55+8=153" → answer of the last link (see Parser.swift).
+    while (this.isOp(this.cur, "=")) {
+      this.i++;
+      if (this.cur.kind === "eof") break;
+      let j = this.i;
+      while (this.t[j].kind !== "eof" && !this.isOp(this.t[j], "=")) j++;
+      if (j === this.i) continue;
+      const seg = this.t.slice(this.i, j);
+      const isNote = this.t[j].kind === "eof" && seg[0].kind === "num" && seg.every((x) => x.kind === "num" || x.kind === "ident");
+      if (isNote) { this.i = j; break; }
+      if (this.cur.kind === "op" && ["+", "-", "*", "/", "^"].includes(this.cur.text)) v = this.continueOps(v, true);
+      else v = this.parseConversion();
+    }
     this.finish();
     return v;
   }
   finish() {
-    if (this.isOp(this.cur, "=")) this.i = this.t.length - 1;
     if (this.cur.kind !== "eof") throw new CalcError(tr("unclear", this.cur.text));
   }
-  parseConversion() {
-    let v = this.parseExpr();
+  parseConversion() { return this.continueOps(this.parseExpr(), false); }
+  continueOps(start, allowPower) {
+    let v = start;
     for (;;) {
+      if (allowPower && this.isOp(this.cur, "^")) { this.i++; v = this.power(v, this.parseUnary()); continue; }
       const tok = this.cur;
       if (this.isConvWord(tok)) {
         const j = this.i + 1, nt = this.at(j);

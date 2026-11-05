@@ -138,20 +138,47 @@ final class Parser {
             ctx.vars[name] = v
             return v
         }
-        let v = try parseConversion()
+        var v = try parseConversion()
+        // Chains: "88+1=89+1=90+55+8=153" → answer of the last link.
+        // A link that starts with an operator continues from the previous answer: "10=+5=*2".
+        // A last link that is only a number (a note or an old answer) keeps the live answer.
+        while isOp(cur, "=") {
+            i += 1
+            if cur.kind == .eof { break }
+            var j = i
+            while t[j].kind != .eof && !isOp(t[j], "=") { j += 1 }
+            if j == i { continue }
+            let isNote = t[j].kind == .eof && t[i..<j].allSatisfy { $0.kind == .num || $0.kind == .ident }
+                && t[i].kind == .num
+            if isNote { i = j; break }
+            if cur.kind == .op && ["+", "-", "*", "/", "^", "%"].contains(cur.text) && cur.text != "%" {
+                v = try continueOps(v, allowPower: true)
+            } else {
+                v = try parseConversion()
+            }
+        }
         try finish()
         return v
     }
 
     private func finish() throws {
-        // "14/105=0.1333" — everything after "=" is the user's own note.
-        if isOp(cur, "=") { i = t.count - 1 }
         guard cur.kind == .eof else { throw CalcError(tr("unclear", cur.text)) }
     }
 
     private func parseConversion() throws -> Value {
-        var v = try parseExpr()
+        try continueOps(try parseExpr(), allowPower: false)
+    }
+
+    /// Conversions and arithmetic applied to an already computed value.
+    private func continueOps(_ start: Value, allowPower: Bool) throws -> Value {
+        var v = start
         while true {
+            if allowPower && isOp(cur, "^") {
+                i += 1
+                let e = try parseUnary()
+                v = try power(v, e)
+                continue
+            }
             let tok = cur
             if isConvWord(tok) {
                 let j = i + 1
