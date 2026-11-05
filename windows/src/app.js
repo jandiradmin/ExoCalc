@@ -182,6 +182,7 @@ function updateStatus() {
   if (r && r.error && settings.showHints && lineText(i).trim()) {
     statusEl.className = "err"; statusEl.textContent = "⚠ " + r.error; return;
   }
+  if (r && r.warning && settings.showHints) { statusEl.className = "err"; statusEl.textContent = "⚠ " + r.warning; return; }
   statusEl.className = "";
   statusEl.textContent = r && r.display ? tr("stResult") : tr("stDefault", settings.hotkey, ratesTimeText());
 }

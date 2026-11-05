@@ -49,6 +49,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 .k-function { color: var(--fn); }
 .k-variable { color: var(--var); }
 .k-comment, .k-label { color: var(--cm); }
+.k-error { color: var(--hint); text-decoration: underline wavy; text-decoration-thickness: 1px; }
 
 #results { position: absolute; top: 0; right: 0; width: var(--rescol); height: 100%; }
 .res {

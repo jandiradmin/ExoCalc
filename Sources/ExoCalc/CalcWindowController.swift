@@ -320,6 +320,11 @@ final class CalcWindowController: NSObject, NSWindowDelegate, NSTextViewDelegate
                 statusLabel.stringValue = "⚠︎ \(e)"
                 return
             }
+            if let w = r.warning, AppSettings.shared.showHints {
+                statusLabel.textColor = Theme.hint
+                statusLabel.stringValue = "⚠︎ \(w)"
+                return
+            }
             if r.display != nil {
                 statusLabel.textColor = Theme.status
                 statusLabel.stringValue = tr("stResult")

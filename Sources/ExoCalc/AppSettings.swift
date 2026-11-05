@@ -120,6 +120,7 @@ enum Theme {
         case .function: return function
         case .variable: return variable
         case .comment, .label: return comment
+        case .error: return hint
         }
     }
 }

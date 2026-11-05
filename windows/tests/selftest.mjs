@@ -328,6 +328,22 @@ const cases = [
   "1,024"
  ],
  [
+  "88+1=890+1=891",
+  "90"
+ ],
+ [
+  "1/3=0.33*3",
+  "1"
+ ],
+ [
+  "1/3=0.3*3",
+  "1"
+ ],
+ [
+  "14*5 = 70",
+  "70"
+ ],
+ [
   "685.00 - .99",
   "684.01"
  ],
@@ -349,6 +365,11 @@ for (const [expr, want] of cases) {
   const r = e.evaluateOne(expr);
   const got = r.display ?? "ERR: " + r.error;
   if (got !== want) { ok = false; console.log(`✗ ${expr}\n    want: ${want}\n    got:  ${got}`); }
+}
+for (const [expr, warn] of [["88+1=890+1", true], ["88+1=89+1", false], ["1/3=0.33*3", false], ["14*5 = 71", true], ["14/105=0.1333333333", false], ["685,00-0,99=684,01", false]]) {
+  count++;
+  const r = e.evaluateOne(expr);
+  if (!!r.warning !== warn) { ok = false; console.log(`✗ warning for «${expr}»: want ${warn}, got ${r.warning}`); }
 }
 const sheet = ["a = 10", "b = 5", "a * b", "", "x: 100", "y: 50", "sum", "prev * 2", "# заголовок", "avg"];
 const wantSheet = ["10", "5", "50", null, "100", "50", "150", "300", null, "0"];

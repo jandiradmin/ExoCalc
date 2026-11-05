@@ -379,7 +379,18 @@ const V = (num, unit = null, isPercent = false, format = "dec") => ({ num, unit,
 const copy = (v) => ({ ...v });
 
 class Parser {
-  constructor(tokens, reg, ctx) { this.t = tokens; this.i = 0; this.reg = reg; this.ctx = ctx; this.marks = []; }
+  constructor(tokens, reg, ctx) {
+    this.t = tokens; this.i = 0; this.reg = reg; this.ctx = ctx; this.marks = []; this.warnings = [];
+    this.fmt = String; this.decimals = 2; this.override = null;
+  }
+  matches(typed, actual) {
+    const str = String(typed);
+    let digits = 0;
+    if (/e/.test(str)) digits = 12;
+    else if (str.includes(".")) digits = str.split(".")[1].length;
+    const tol = 0.5 * Math.pow(10, -Math.max(digits, this.decimals)) + 1e-9 * Math.max(1, Math.abs(actual));
+    return Math.abs(typed - actual) <= tol;
+  }
   get cur() { return this.t[this.i]; }
   at(k) { return this.t[Math.min(k, this.t.length - 1)]; }
   isOp(tok, s) { return tok.kind === "op" && tok.text === s; }
@@ -449,9 +460,27 @@ class Parser {
       if (j === this.i) continue;
       const seg = this.t.slice(this.i, j);
       const isNote = this.t[j].kind === "eof" && seg[0].kind === "num" && seg.every((x) => x.kind === "num" || x.kind === "ident");
-      if (isNote) { this.i = j; break; }
+      if (isNote) {
+        if (!v.isPercent && !this.matches(seg[0].num, v.num)) {
+          this.warnings.push(tr("noteFix", seg.map((x) => x.text).join(" "), this.fmt(v.num)));
+          this.marks.push({ start: seg[0].start, end: seg[seg.length - 1].end, kind: "error" });
+        }
+        this.i = j;
+        break;
+      }
       if (this.cur.kind === "op" && ["+", "-", "*", "/", "^"].includes(this.cur.text)) v = this.continueOps(v, true);
-      else v = this.parseConversion();
+      else {
+        // Always continue from the exact answer (the text may show it rounded).
+        if (this.cur.kind === "num" && !v.isPercent) {
+          if (!this.matches(this.cur.num, v.num)) {
+            this.warnings.push(tr("chainFix", this.cur.text, this.fmt(v.num)));
+            this.marks.push({ start: this.cur.start, end: this.cur.end, kind: "error" });
+          }
+          this.override = { index: this.i, value: v.num };
+        }
+        v = this.parseConversion();
+        this.override = null;
+      }
     }
     this.finish();
     return v;
@@ -582,7 +611,9 @@ class Parser {
   parsePrimary() {
     const tok = this.cur;
     switch (tok.kind) {
-      case "num": this.i++; return V(tok.num);
+      case "num":
+        if (this.override && this.override.index === this.i) { this.i++; return V(this.override.value); }
+        this.i++; return V(tok.num);
       case "lparen": {
         this.i++;
         const v = this.parseConversion();
@@ -831,7 +862,7 @@ export class Engine {
   evaluateOne(expr) { return this.evaluate([expr])[0]; }
 
   evalLine(line, ctx) {
-    const res = { value: null, display: null, error: null, highlights: [] };
+    const res = { value: null, display: null, error: null, warning: null, highlights: [] };
     const n = line.length;
     let start = 0;
     while (start < n && (line[start] === " " || line[start] === "\t")) start++;
@@ -859,6 +890,8 @@ export class Engine {
       const toks = new Lexer(body, start, this.settings).tokenize();
       for (const t of toks) if (t.kind === "num") res.highlights.push({ start: t.start, end: t.end, kind: "number" });
       parser = new Parser(toks, this.registry, ctx);
+      parser.decimals = this.settings.decimals;
+      parser.fmt = (x) => this.number(x, this.settings.decimals);
       const v = parser.parseLine();
       if (v) {
         res.value = v;
@@ -867,6 +900,7 @@ export class Engine {
         ctx.block.push(v);
       }
       res.highlights.push(...parser.marks);
+      res.warning = parser.warnings[0] || null;
     } catch (e) {
       res.value = null; res.display = null;
       res.error = e instanceof CalcError ? e.message : String(e && e.message || e);

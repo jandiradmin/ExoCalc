@@ -33,7 +33,7 @@ public struct CalcSettings: Equatable {
 }
 
 public enum HKind {
-    case number, unit, keyword, function, variable, comment, label
+    case number, unit, keyword, function, variable, comment, label, error
 }
 
 /// Syntax highlight span; offsets are UTF-16 positions inside the line.
@@ -47,6 +47,8 @@ public struct LineResult {
     public var value: Value?
     public var display: String?
     public var error: String?
+    /// Non-fatal note, e.g. a wrong number inside a chain.
+    public var warning: String?
     public var highlights: [Highlight] = []
     public init() {}
 }

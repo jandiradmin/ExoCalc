@@ -68,6 +68,8 @@ public final class Engine {
                 res.highlights.append(Highlight(start: tk.start, end: tk.end, kind: .number))
             }
             let p = Parser(toks, reg: registry, ctx: ctx)
+            p.decimals = settings.decimals
+            p.fmt = { [unowned self] x in self.number(x, decimals: self.settings.decimals) }
             parser = p
             if let v = try p.parseLine() {
                 res.value = v
@@ -76,6 +78,7 @@ public final class Engine {
                 ctx.block.append(v)
             }
             res.highlights += p.marks
+            res.warning = p.warnings.first
         } catch let e as CalcError {
             res.error = e.message
             res.value = nil

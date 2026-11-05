@@ -13,6 +13,12 @@ final class Parser {
     private let reg: UnitRegistry
     private let ctx: Context
     var marks: [Highlight] = []
+    var warnings: [String] = []
+    /// Formats a number for messages; set by the engine.
+    var fmt: (Double) -> String = { String($0) }
+    /// Decimal places shown to the user (for comparing typed numbers).
+    var decimals = 2
+    private var override: (index: Int, value: Double)?
 
     static let convWords: Set<String> = ["in", "to", "as", "into", "в", "во", "у"]
 
@@ -150,15 +156,48 @@ final class Parser {
             if j == i { continue }
             let isNote = t[j].kind == .eof && t[i..<j].allSatisfy { $0.kind == .num || $0.kind == .ident }
                 && t[i].kind == .num
-            if isNote { i = j; break }
-            if cur.kind == .op && ["+", "-", "*", "/", "^", "%"].contains(cur.text) && cur.text != "%" {
+            if isNote {
+                if !v.isPercent && !matches(t[i].num, v.num) {
+                    let text = t[i..<j].map { $0.text }.joined(separator: " ")
+                    warnings.append(tr("noteFix", text, fmt(v.num)))
+                    marks.append(Highlight(start: t[i].start, end: t[j - 1].end, kind: .error))
+                }
+                i = j
+                break
+            }
+            if cur.kind == .op && ["+", "-", "*", "/", "^"].contains(cur.text) {
                 v = try continueOps(v, allowPower: true)
             } else {
+                // The link should start with the previous answer; if the typed number differs,
+                // continue from the real answer and flag the number.
+                // Always continue from the exact answer (the text may show it rounded).
+                if cur.kind == .num && !v.isPercent {
+                    if !matches(cur.num, v.num) {
+                        warnings.append(tr("chainFix", cur.text, fmt(v.num)))
+                        marks.append(Highlight(start: cur.start, end: cur.end, kind: .error))
+                    }
+                    override = (i, v.num)
+                }
                 v = try parseConversion()
+                override = nil
             }
         }
         try finish()
         return v
+    }
+
+    /// Typed number equals the answer within the precision it was written with.
+    private func matches(_ typed: Double, _ actual: Double) -> Bool {
+        var digits = 0
+        let str = String(typed)
+        if str.contains("e") {
+            digits = 12
+        } else if let dot = str.firstIndex(of: ".") {
+            let frac = str[str.index(after: dot)...]
+            digits = frac == "0" ? 0 : frac.count
+        }
+        let tol = 0.5 * pow(10.0, -Double(max(digits, decimals))) + 1e-9 * Swift.max(1, Swift.abs(actual))
+        return Swift.abs(typed - actual) <= tol
     }
 
     private func finish() throws {
@@ -344,6 +383,10 @@ final class Parser {
         let tok = cur
         switch tok.kind {
         case .num:
+            if let o = override, o.index == i {
+                i += 1
+                return Value(o.value)
+            }
             i += 1
             return Value(tok.num)
         case .lparen:

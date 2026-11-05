@@ -303,6 +303,8 @@ export const STRINGS = {
   "number too large",
   "занадто велике число"
  ],
+ "chainFix": ["в цепочке {0}, а должно быть {1} — считаю от {1}", "chain says {0}, should be {1} — continuing from {1}", "у ланцюжку {0}, а має бути {1} — рахую від {1}"],
+ "noteFix": ["после = написано {0}, а ответ {1}", "after = it says {0}, the answer is {1}", "після = написано {0}, а відповідь {1}"],
  "intOnly": [
   "hex/bin/oct — только для целых",
   "hex/bin/oct: integers only",
