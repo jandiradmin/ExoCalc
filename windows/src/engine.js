@@ -277,10 +277,10 @@ class Lexer {
   /** 23:30, 23:30:15, 12.12.2026, 2026-12-12, 12/31/2026 (US order). */
   lexDateTime(i) {
     const rest = this.s.slice(i);
-    let m = rest.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?![\d:])/);
+    let m = rest.match(/^(\d{1,3}):(\d{2})(?::(\d{2}))?(?![\d:])/);
     if (m) {
       const h = +m[1], mi = +m[2], se = m[3] ? +m[3] : 0;
-      if (h <= 24 && mi < 60 && se < 60) return { kind: "clock", num: h * 3600 + mi * 60 + se, end: i + m[0].length };
+      if (mi < 60 && se < 60) return { kind: "clock", num: h * 3600 + mi * 60 + se, end: i + m[0].length };
     }
     const date = (y, mo, d, len) => (validDate(y, mo, d) ? { kind: "date", num: daysFromCivil(y, mo, d), end: i + len } : null);
     if ((m = rest.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?![\d.])/))) {
@@ -402,6 +402,8 @@ const AVG_WORDS = new Set(["avg", "average", "среднее", "середнє"]
 const V = (num, unit = null, isPercent = false, format = "dec", kind = "plain", tz = null) => ({ num, unit, isPercent, format, kind, tz });
 const CLOCK = (sec, tz = null) => V(sec, null, false, "dec", "clock", tz);
 const DATE = (days) => V(days, null, false, "dec", "date");
+const HMS = (sec, showSec = false) => ({ ...V(sec, null, false, "hms"), showSec });
+const isHMS = (v) => v.kind === "plain" && v.format === "hms";
 const isTimeUnit = (v) => v.kind === "plain" && v.unit && v.unit.dim === "time" && !v.isPercent;
 const isPlainNum = (v) => v.kind === "plain" && !v.unit && !v.isPercent;
 const copy = (v) => ({ ...v });
@@ -493,6 +495,7 @@ class Parser {
       if (isNote) {
         const differs = seg[0].kind === "num"
           ? v.kind === "plain" && !v.isPercent && v.format !== "hms" && !this.matches(seg[0].num, v.num)
+          : seg[0].kind === "clock" && isHMS(v) ? Math.abs(seg[0].num - Math.abs(v.num)) > 0.5
           : seg[0].kind !== v.kind || (v.kind === "date" ? seg[0].num !== v.num : (((seg[0].num - v.num) % 86400) + 86400) % 86400 !== 0);
         if (differs) {
           this.warnings.push(tr("noteFix", seg.map((x) => x.text).join(" "), this.fmtValue(v)));
@@ -656,7 +659,13 @@ class Parser {
   parsePrimary() {
     const tok = this.cur;
     switch (tok.kind) {
-      case "clock": this.i++; return CLOCK(tok.num);
+      case "clock": {
+        this.i++;
+        const showSec = (tok.text.match(/:/g) || []).length > 1;
+        // more than 24 hours can only be a duration: 36:30
+        if (tok.num > 24 * 3600) { const v = HMS(tok.num, showSec); v.unit = this.reg.lookup("s"); return v; }
+        const v = CLOCK(tok.num); v.showSec = showSec; return v;
+      }
       case "date": this.i++; return DATE(tok.num);
       case "num":
         if (this.override && this.override.index === this.i) { this.i++; return V(this.override.value); }
@@ -791,7 +800,8 @@ class Parser {
   /** "8 h 35 min", "1 day 2 h": add following number+unit of the same kind. */
   compoundUnits(v) {
     while (this.cur.kind === "num" && ["time", "length", "mass"].includes(v.unit.dim)) {
-      const m = this.matchUnit(this.i + 1);
+      let m = this.matchUnit(this.i + 1);
+      if (m && v.unit.dim === "time" && m[0].dim !== "time" && this.at(this.i + 1).text === "m") m = [this.reg.lookup("min"), 1];
       if (!m || m[0].dim !== v.unit.dim || CONV_WORDS.has(this.at(this.i + 1).text.toLowerCase())) break;
       const n = this.cur.num;
       this.mark(this.i + 1, this.i + m[1], "unit");
@@ -827,13 +837,18 @@ class Parser {
   addSubDT(a, b, sub) {
     const sign = sub ? -1 : 1;
     if (a.isPercent || b.isPercent) throw new CalcError(tr("dateOp"));
-    // clock ± duration
-    if (a.kind === "clock" && isTimeUnit(b)) return CLOCK(a.num + sign * this.reg.convert(b.num, b.unit, this.reg.lookup("s")), a.tz);
-    if (b.kind === "clock" && isTimeUnit(a) && !sub) return CLOCK(b.num + this.reg.convert(a.num, a.unit, this.reg.lookup("s")), b.tz);
-    if (a.kind === "clock" && b.kind === "clock" && sub) {
-      const bInA = a.tz || b.tz ? this.toZone(b, a.tz).num : b.num;
-      return V(a.num - bInA, this.reg.lookup("s"), false, "hms");
+    const sec = this.reg.lookup("s");
+    const showSec = !!(a.showSec || b.showSec);
+    const asDur = (n) => { const v = HMS(n, showSec); v.unit = sec; return v; };
+    // time ± time → duration: 0:45+0:30, 18:45-9:30
+    if (a.kind === "clock" && b.kind === "clock") {
+      const bn = sub && (a.tz || b.tz) ? this.toZone(b, a.tz).num : b.num;
+      return asDur(a.num + sign * bn);
     }
+    if ((a.kind === "clock" && isHMS(b)) || (isHMS(a) && b.kind === "clock")) return asDur(a.num + sign * b.num);
+    // clock ± duration in units (h, min) → time of day
+    if (a.kind === "clock" && isTimeUnit(b)) { const c = CLOCK(a.num + sign * this.reg.convert(b.num, b.unit, sec), a.tz); c.showSec = showSec; return c; }
+    if (b.kind === "clock" && isTimeUnit(a) && !sub) return CLOCK(b.num + this.reg.convert(a.num, a.unit, this.reg.lookup("s")), b.tz);
     if (a.kind === "clock" && isPlainNum(b)) throw new CalcError(tr("timeNeedsUnit"));
     // date ± duration
     if (a.kind === "date" && isTimeUnit(b)) return DATE(this.shiftDate(a.num, sign * b.num, b.unit));
@@ -865,6 +880,7 @@ class Parser {
   }
   addSub(a, b, sub) {
     if (a.kind !== "plain" || b.kind !== "plain") return this.addSubDT(a, b, sub);
+    if ((isHMS(a) && isPlainNum(b)) || (isHMS(b) && isPlainNum(a))) throw new CalcError(tr("timeNeedsUnit"));
     const sign = sub ? -1 : 1;
     if (b.isPercent && !a.isPercent) { const r = copy(a); r.num = a.num * (1 + (sign * b.num) / 100); return r; }
     if (a.isPercent !== b.isPercent) throw new CalcError(tr("pctAdd"));
@@ -875,9 +891,14 @@ class Parser {
     return r;
   }
   mul(a, b) {
-    if (a.kind === "clock" && isPlainNum(b)) return CLOCK(a.num * b.num, a.tz);
-    if (b.kind === "clock" && isPlainNum(a)) return CLOCK(a.num * b.num, b.tz);
+    const sec = this.reg.lookup("s");
+    const toDur = (c) => { if (c.kind !== "clock") return c; const v = HMS(c.num, c.showSec); v.unit = sec; return v; };
+    a = toDur(a); b = toDur(b);
     if (a.kind !== "plain" || b.kind !== "plain") throw new CalcError(tr("dateOp"));
+    // hours × rate: 8:30 * $25, 8 h * 25 usd
+    const timeMoney = (t, m) => t.unit && t.unit.dim === "time" && m.unit && m.unit.dim === "currency" && !t.isPercent && !m.isPercent;
+    if (timeMoney(a, b)) return V(this.reg.convert(a.num, a.unit, this.reg.lookup("h")) * b.num, b.unit);
+    if (timeMoney(b, a)) return V(this.reg.convert(b.num, b.unit, this.reg.lookup("h")) * a.num, a.unit);
     if (a.isPercent && b.isPercent) return V((a.num * b.num) / 100, null, true);
     if (b.isPercent) { const r = copy(a); r.num = (a.num * b.num) / 100; return r; }
     if (a.isPercent) { const r = copy(b); r.num = (b.num * a.num) / 100; return r; }
@@ -894,7 +915,8 @@ class Parser {
   }
   div(a, b) {
     if (b.num === 0) throw new CalcError(tr("divZero"));
-    if (a.kind === "clock" && isPlainNum(b)) return CLOCK(a.num / b.num, a.tz);
+    if (a.kind === "clock") { const v = HMS(a.num, a.showSec); v.unit = this.reg.lookup("s"); a = v; }
+    if (b.kind === "clock") { const v = HMS(b.num, b.showSec); v.unit = this.reg.lookup("s"); b = v; }
     if (a.kind !== "plain" || b.kind !== "plain") throw new CalcError(tr("dateOp"));
     if (a.isPercent && b.isPercent) return V(a.num / b.num);
     if (b.isPercent) { const r = copy(a); r.num = a.num / (b.num / 100); return r; }
@@ -1092,7 +1114,7 @@ export class Engine {
   format(v) {
     if (v.kind === "clock") return this.formatClock(v);
     if (v.kind === "date") return this.formatDate(v.num);
-    if (v.format === "hms") return this.formatDuration(v.num);
+    if (v.format === "hms") return this.formatDuration(v.num, v.showSec);
     if (!isFinite(v.num)) throw new CalcError(Number.isNaN(v.num) ? tr("noResult") : tr("tooBig"));
     const suffix = v.unit ? (v.unit.id === "°" ? "°" : " " + v.unit.id) : "";
     if (v.format === "hex" || v.format === "bin" || v.format === "oct") {
@@ -1114,7 +1136,7 @@ export class Engine {
     const dayOff = Math.floor(total / 86400), sec = total - dayOff * 86400;
     const two = (n) => String(n).padStart(2, "0");
     let s = `${two(Math.floor(sec / 3600))}:${two(Math.floor((sec % 3600) / 60))}`;
-    if (sec % 60) s += ":" + two(sec % 60);
+    if (sec % 60 || v.showSec) s += ":" + two(sec % 60);
     if (v.tz) s += " " + v.tz.label;
     if (dayOff) s += " " + tr("dayOff", (dayOff > 0 ? "+" : "−") + Math.abs(dayOff));
     return s;
@@ -1126,15 +1148,13 @@ export class Engine {
     const s = f === "mdy" ? `${two(m)}/${two(d)}/${y}` : f === "ymd" ? `${y}-${two(m)}-${two(d)}` : `${two(d)}.${two(m)}.${y}`;
     return s + ", " + tr("wd" + weekday(days));
   }
-  formatDuration(sec) {
+  /** Durations as H:MM (H:MM:SS when seconds matter): 9:15, -9:15, 22:00:00, 36:30. */
+  formatDuration(sec, showSec = false) {
     const sign = sec < 0 ? "-" : "";
-    let t = Math.round(Math.abs(sec));
+    const t = Math.round(Math.abs(sec));
     const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
-    const parts = [];
-    if (h) parts.push(`${h} h`);
-    if (m || (!h && !s)) parts.push(`${m} min`);
-    if (s) parts.push(`${s} s`);
-    return sign + parts.join(" ");
+    const two = (n) => String(n).padStart(2, "0");
+    return sign + `${h}:${two(m)}` + (s || showSec ? ":" + two(s) : "");
   }
 
   get groupSep() {

@@ -173,6 +173,8 @@ final class Parser {
                 let differs: Bool
                 if first.kind == .num {
                     differs = v.kind == .plain && !v.isPercent && v.format != .hms && !matches(first.num, v.num)
+                } else if first.kind == .clock && v.isHMS {
+                    differs = Swift.abs(first.num - Swift.abs(v.num)) > 0.5
                 } else if (first.kind == .clock && v.kind == .clock) || (first.kind == .date && v.kind == .date) {
                     differs = v.kind == .date ? first.num != v.num
                         : (Int(first.num.rounded()) - Int(v.num.rounded())) % 86400 != 0
@@ -415,7 +417,12 @@ final class Parser {
         switch tok.kind {
         case .clock:
             i += 1
-            return Value.clock(tok.num)
+            let showSec = tok.text.filter { $0 == ":" }.count > 1
+            // more than 24 hours can only be a duration: 36:30
+            if tok.num > 24 * 3600 { return Value.duration(tok.num, showSec, unit: reg.lookup("s")) }
+            var c = Value.clock(tok.num)
+            c.showSec = showSec
+            return c
         case .date:
             i += 1
             return Value.date(Int(tok.num))
@@ -609,7 +616,10 @@ final class Parser {
     private func compoundUnits(_ input: Value) throws -> Value {
         var v = input
         while cur.kind == .num, let u = v.unit, [UnitDim.time, .length, .mass].contains(u.dim) {
-            guard let m = matchUnit(at: i + 1), m.0.dim == u.dim,
+            var mm = matchUnit(at: i + 1)
+            // "1 h 30 m": after hours "m" means minutes
+            if let x = mm, u.dim == .time, x.0.dim != .time, at(i + 1).text == "m", let minute = reg.lookup("min") { mm = (minute, 1) }
+            guard let m = mm, m.0.dim == u.dim,
                   !Parser.convWords.contains(at(i + 1).text.lowercased()) else { break }
             let n = cur.num
             mark(i + 1, i + m.1, .unit)
@@ -654,15 +664,23 @@ final class Parser {
         let sign: Double = sub ? -1 : 1
         if a.isPercent || b.isPercent { throw CalcError(tr("dateOp")) }
         guard let secUnit = reg.lookup("s"), let dayUnit = reg.lookup("day") else { throw CalcError(tr("dateOp")) }
+        let showSec = a.showSec || b.showSec
+        // time ± time → duration: 0:45+0:30, 18:45-9:30
+        if a.kind == .clock && b.kind == .clock {
+            let bn = sub && (a.tz != nil || b.tz != nil) ? toZone(b, a.tz).num : b.num
+            return Value.duration(a.num + sign * bn, showSec, unit: secUnit)
+        }
+        if (a.kind == .clock && b.isHMS) || (a.isHMS && b.kind == .clock) {
+            return Value.duration(a.num + sign * b.num, showSec, unit: secUnit)
+        }
+        // clock ± duration in units (h, min) → time of day
         if a.kind == .clock, b.isDuration, let bu = b.unit {
-            return Value.clock(a.num + sign * (try reg.convert(b.num, bu, secUnit)), a.tz)
+            var c = Value.clock(a.num + sign * (try reg.convert(b.num, bu, secUnit)), a.tz)
+            c.showSec = showSec
+            return c
         }
         if b.kind == .clock, a.isDuration, !sub, let au = a.unit {
             return Value.clock(b.num + (try reg.convert(a.num, au, secUnit)), b.tz)
-        }
-        if a.kind == .clock && b.kind == .clock && sub {
-            let bInA = (a.tz != nil || b.tz != nil) ? toZone(b, a.tz).num : b.num
-            return Value(a.num - bInA, unit: secUnit, format: .hms)
         }
         if a.kind == .clock && b.isPlainNumber { throw CalcError(tr("timeNeedsUnit")) }
         if a.kind == .date, b.isDuration, let bu = b.unit {
@@ -707,6 +725,7 @@ final class Parser {
 
     private func addSub(_ a: Value, _ b: Value, _ sub: Bool) throws -> Value {
         if a.kind != .plain || b.kind != .plain { return try addSubDT(a, b, sub) }
+        if (a.isHMS && b.isPlainNumber) || (b.isHMS && a.isPlainNumber) { throw CalcError(tr("timeNeedsUnit")) }
         let sign: Double = sub ? -1 : 1
         if b.isPercent && !a.isPercent {
             var r = a
@@ -728,10 +747,19 @@ final class Parser {
         return r
     }
 
-    private func mul(_ a: Value, _ b: Value) throws -> Value {
-        if a.kind == .clock && b.isPlainNumber { return Value.clock(a.num * b.num, a.tz) }
-        if b.kind == .clock && a.isPlainNumber { return Value.clock(a.num * b.num, b.tz) }
+    private func asDuration(_ v: Value) -> Value {
+        v.kind == .clock ? Value.duration(v.num, v.showSec, unit: reg.lookup("s")) : v
+    }
+
+    private func mul(_ a0: Value, _ b0: Value) throws -> Value {
+        let a = asDuration(a0), b = asDuration(b0)
         if a.kind != .plain || b.kind != .plain { throw CalcError(tr("dateOp")) }
+        // hours × rate: 8:30 * $25, 8 h * 25 usd
+        func timeMoney(_ t: Value, _ m: Value) -> Bool {
+            t.unit?.dim == .time && m.unit?.dim == .currency && !t.isPercent && !m.isPercent
+        }
+        if timeMoney(a, b), let tu = a.unit, let h = reg.lookup("h") { return Value(try reg.convert(a.num, tu, h) * b.num, unit: b.unit) }
+        if timeMoney(b, a), let tu = b.unit, let h = reg.lookup("h") { return Value(try reg.convert(b.num, tu, h) * a.num, unit: a.unit) }
         if a.isPercent && b.isPercent { return Value(a.num * b.num / 100, percent: true) }
         if b.isPercent { var r = a; r.num = a.num * b.num / 100; return r }
         if a.isPercent { var r = b; r.num = b.num * a.num / 100; return r }
@@ -751,9 +779,9 @@ final class Parser {
         }
     }
 
-    private func div(_ a: Value, _ b: Value) throws -> Value {
+    private func div(_ a0: Value, _ b0: Value) throws -> Value {
+        let a = asDuration(a0), b = asDuration(b0)
         if b.num == 0 { throw CalcError(tr("divZero")) }
-        if a.kind == .clock && b.isPlainNumber { return Value.clock(a.num / b.num, a.tz) }
         if a.kind != .plain || b.kind != .plain { throw CalcError(tr("dateOp")) }
         if a.isPercent && b.isPercent { return Value(a.num / b.num) }
         if b.isPercent { var r = a; r.num = a.num / (b.num / 100); return r }

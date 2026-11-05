@@ -21,6 +21,8 @@ public struct Value {
     public var format: NumFormat
     public var kind: ValueKind = .plain
     public var tz: CalcZone?
+    /// Show seconds for times/durations (the user typed them).
+    public var showSec = false
 
     public init(_ num: Double, unit: CalcUnit? = nil, percent: Bool = false, format: NumFormat = .dec) {
         self.num = num
@@ -42,6 +44,13 @@ public struct Value {
         return v
     }
 
+    static func duration(_ sec: Double, _ showSec: Bool, unit: CalcUnit?) -> Value {
+        var v = Value(sec, unit: unit, format: .hms)
+        v.showSec = showSec
+        return v
+    }
+
+    var isHMS: Bool { kind == .plain && format == .hms }
     var isPlainNumber: Bool { kind == .plain && unit == nil && !isPercent }
     var isDuration: Bool { kind == .plain && unit?.dim == .time && !isPercent }
 }

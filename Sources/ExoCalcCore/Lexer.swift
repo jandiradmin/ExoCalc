@@ -161,11 +161,11 @@ struct Lexer {
     /// 23:30, 23:30:15, 12.12.2026, 2026-12-12, 12/31/2026 (US order).
     private func lexDateTime(_ i: Int) throws -> (kind: Token.Kind, num: Double, end: Int)? {
         // clock
-        if let (h, e1) = digits(i, 1, 2), at(e1) == 58, let (mi, e2) = digits(e1 + 1, 2, 2) {
+        if let (h, e1) = digits(i, 1, 3), at(e1) == 58, let (mi, e2) = digits(e1 + 1, 2, 2) {
             var sec = 0
             var end = e2
             if at(e2) == 58, let (se, e3) = digits(e2 + 1, 2, 2) { sec = se; end = e3 }
-            if at(end) != 58 && h <= 24 && mi < 60 && sec < 60 {
+            if at(end) != 58 && mi < 60 && sec < 60 {
                 return (.clock, Double(h * 3600 + mi * 60 + sec), end)
             }
         }

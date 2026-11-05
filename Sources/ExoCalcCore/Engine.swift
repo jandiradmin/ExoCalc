@@ -115,7 +115,7 @@ public final class Engine {
         case .date: return formatDate(Int(v.num))
         case .plain: break
         }
-        if v.format == .hms { return formatDuration(v.num) }
+        if v.format == .hms { return formatDuration(v.num, v.showSec) }
         guard v.num.isFinite else {
             throw CalcError(v.num.isNaN ? tr("noResult") : tr("tooBig"))
         }
@@ -130,7 +130,7 @@ public final class Engine {
             let body = String(iv.magnitude, radix: radix, uppercase: true)
             return (iv < 0 ? "-" : "") + prefix + body + unitSuffix(v)
         case .hms:
-            return formatDuration(v.num)
+            return formatDuration(v.num, v.showSec)
         case .sci:
             return sci(v.num, digits: max(settings.decimals, 3)) + unitSuffix(v)
         case .dec:
@@ -151,7 +151,7 @@ public final class Engine {
         let dayOff = Int((Double(total) / 86400).rounded(.down))
         let sec = total - dayOff * 86400
         var s = "\(two(sec / 3600)):\(two(sec % 3600 / 60))"
-        if sec % 60 != 0 { s += ":" + two(sec % 60) }
+        if sec % 60 != 0 || v.showSec { s += ":" + two(sec % 60) }
         if let z = v.tz { s += " " + z.label }
         if dayOff != 0 { s += " " + tr("dayOff", (dayOff > 0 ? "+" : "−") + String(Swift.abs(dayOff))) }
         return s
@@ -168,15 +168,12 @@ public final class Engine {
         return s + ", " + tr("wd\(DT.weekday(days))")
     }
 
-    func formatDuration(_ secs: Double) -> String {
+    /// Durations as H:MM (H:MM:SS when seconds matter): 9:15, -9:15, 22:00:00, 36:30.
+    func formatDuration(_ secs: Double, _ showSec: Bool = false) -> String {
         let sign = secs < 0 ? "-" : ""
         let t = Int(Swift.abs(secs).rounded())
         let h = t / 3600, m = t % 3600 / 60, s = t % 60
-        var parts: [String] = []
-        if h != 0 { parts.append("\(h) h") }
-        if m != 0 || (h == 0 && s == 0) { parts.append("\(m) min") }
-        if s != 0 { parts.append("\(s) s") }
-        return sign + parts.joined(separator: " ")
+        return sign + "\(h):\(two(m))" + (s != 0 || showSec ? ":" + two(s) : "")
     }
 
     private func unitSuffix(_ v: Value) -> String {
