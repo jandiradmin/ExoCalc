@@ -55,7 +55,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 .res {
   position: absolute; right: 18px; white-space: nowrap; cursor: pointer;
   font-family: var(--font); font-size: var(--size); line-height: var(--lh); color: var(--res);
-  font-weight: 500; border-radius: 4px; padding: 0 4px; margin-right: -4px;
+  font-weight: 500; border-radius: 4px; padding: 0 8px 0 14px; margin-right: -8px;
 }
 .res:hover { background: rgba(255, 255, 255, 0.06); }
 .res.flash { background: rgba(255, 255, 255, 0.18); }

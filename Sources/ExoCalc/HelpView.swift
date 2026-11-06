@@ -58,7 +58,7 @@ struct HelpView: View {
             (HotKeyFormat.string(code: AppSettings.shared.hotKeyCode, mods: AppSettings.shared.hotKeyMods), tr("tHotkey")),
             ("Esc", tr("tEsc")),
             (tr("tClickKey"), tr("tClick")),
-            ("⇧-click, ⇧⌘C", tr("tShiftClick")),
+            ("⌘-click, ⇧⌘C", tr("tShiftClick")),
             ("⌃⌘C", tr("tCtrlC")),
             ("⌥⌘C", tr("tAltC")),
             ("⌘K", tr("tK")),

@@ -6,9 +6,9 @@ addStrings({
   stDefault: ["F1 — справка · {0} — показать/скрыть · Ctrl+, — настройки · курсы: {1}",
               "F1 — help · {0} — show/hide · Ctrl+, — settings · rates: {1}",
               "F1 — довідка · {0} — показати/сховати · Ctrl+, — налаштування · курси: {1}"],
-  stResult: ["Клик по результату — копировать · Shift+клик или Ctrl+Shift+C — «выражение = результат» · Ctrl+Shift+A — весь лист",
-             "Click a result to copy · Shift+click or Ctrl+Shift+C — “expression = result” · Ctrl+Shift+A — whole sheet",
-             "Клік по результату — копіювати · Shift+клік або Ctrl+Shift+C — «вираз = результат» · Ctrl+Shift+A — весь аркуш"],
+  stResult: ["Клик по результату — копировать · Ctrl+клик по выражению или Ctrl+Shift+C — «выражение = результат» · Ctrl+Shift+A — весь лист",
+             "Click a result to copy · Ctrl+click an expression or Ctrl+Shift+C — “expression = result” · Ctrl+Shift+A — whole sheet",
+             "Клік по результату — копіювати · Ctrl+клік по виразу або Ctrl+Shift+C — «вираз = результат» · Ctrl+Shift+A — весь аркуш"],
   cleared: ["Лист очищен (Ctrl+Z — вернуть, строки сохранены в истории)", "Sheet cleared (Ctrl+Z to undo, lines saved to history)",
             "Аркуш очищено (Ctrl+Z — повернути, рядки збережено в історії)"],
   fontSize: ["Размер (Ctrl+= / Ctrl+-)", "Size (Ctrl+= / Ctrl+-)", "Розмір (Ctrl+= / Ctrl+-)"],
@@ -18,7 +18,7 @@ addStrings({
   btnHelp: ["Справка (F1)", "Help (F1)", "Довідка (F1)"],
   btnHistory: ["История (Ctrl+H)", "History (Ctrl+H)", "Історія (Ctrl+H)"],
   btnSettings: ["Настройки (Ctrl+,)", "Settings (Ctrl+,)", "Налаштування (Ctrl+,)"],
-  tShiftClickKey: ["Shift+клик, Ctrl+Shift+C", "Shift+click, Ctrl+Shift+C", "Shift+клік, Ctrl+Shift+C"],
+  tShiftClickKey: ["Ctrl+клик, Ctrl+Shift+C", "Ctrl+click, Ctrl+Shift+C", "Ctrl+клік, Ctrl+Shift+C"],
   tAltCKey: ["Ctrl+Shift+A", "Ctrl+Shift+A", "Ctrl+Shift+A"],
   tTab: ["дополнить слово (единицы, валюты, функции); ещё раз — следующий вариант", "complete a word (units, currencies, functions); press again for the next match", "доповнити слово (одиниці, валюти, функції); ще раз — наступний варіант"],
   tExamples: ["вставить примеры в лист", "insert examples into the sheet", "вставити приклади в аркуш"],
@@ -558,7 +558,11 @@ async function refreshRates(manual = false) {
 
 ta.addEventListener("input", () => { completion = null; onInput(); });
 ta.addEventListener("keyup", updateStatus);
-ta.addEventListener("click", updateStatus);
+ta.addEventListener("click", (e) => {
+  // Ctrl+click on an expression copies "expression = result"
+  if (e.ctrlKey && !e.shiftKey) { const i = currentLine(); if (results[i] && results[i].display) copyLine(i, true); }
+  updateStatus();
+});
 ta.addEventListener("scroll", () => { ta.scrollTop = 0; });
 new ResizeObserver(() => { recalc(); }).observe(wrap);
 

@@ -25,7 +25,7 @@ ExoCalc is a minimalist notepad calculator for macOS and Windows. Type calculati
 - **Number bases:** `hex`, `bin`, `oct`, `sci`
 - **Always at hand:** runs in the background with a global hotkey (default ⌃⌥=), in the Dock and the menu bar
 - **Memory:** the sheet is saved automatically, and searchable history opens with ⌘Y
-- **Copying:** click a result to copy it; ⇧-click or ⇧⌘C copies “expression = result”, ⌥⌘C copies the whole sheet
+- **Copying:** click a result to copy it; ⌘-click an expression (Windows: Ctrl+click) or ⇧⌘C copies “expression = result”, ⌥⌘C copies the whole sheet
 - **Help:** F1 opens help with live examples, F5 autocompletes
 - **Settings:** language (EN/UK/RU), decimal and thousands separators, decimal places, monospaced font, hotkey
 - **CLI:** `exocalc "600 usd in uah"`
@@ -71,7 +71,7 @@ ExoCalc — мінімалістичний калькулятор-блокнот
 - **Системи числення:** `hex`, `bin`, `oct`, `sci`
 - **Завжди під рукою:** працює у фоні, глобальна гаряча клавіша (за замовчуванням ⌃⌥=), значок у Dock і рядку меню
 - **Пам’ять:** аркуш зберігається автоматично, історія з пошуком відкривається через ⌘Y
-- **Копіювання:** клік по результату копіює його; ⇧-клік або ⇧⌘C — «вираз = результат», ⌥⌘C — весь аркуш
+- **Копіювання:** клік по результату копіює його; ⌘-клік по виразу (Windows: Ctrl+клік) або ⇧⌘C — «вираз = результат», ⌥⌘C — весь аркуш
 - **Довідка:** F1 — довідка з живими прикладами, F5 — автодоповнення
 - **Налаштування:** мова (UK/EN/RU), десятковий роздільник і роздільник тисяч, кількість знаків, моноширинний шрифт, гаряча клавіша
 - **Командний рядок:** `exocalc "600 usd in uah"`
@@ -117,7 +117,7 @@ ExoCalc — минималистичный калькулятор-блокнот
 - **Системы счисления:** `hex`, `bin`, `oct`, `sci`
 - **Всегда под рукой:** работает в фоне, глобальная горячая клавиша (по умолчанию ⌃⌥=), значок в Dock и строке меню
 - **Память:** лист сохраняется автоматически, история с поиском открывается по ⌘Y
-- **Копирование:** клик по результату копирует его; ⇧-клик или ⇧⌘C — «выражение = результат», ⌥⌘C — весь лист
+- **Копирование:** клик по результату копирует его; ⌘-клик по выражению (Windows: Ctrl+клик) или ⇧⌘C — «выражение = результат», ⌥⌘C — весь лист
 - **Справка:** F1 — справка с живыми примерами, F5 — автодополнение
 - **Настройки:** язык (RU/UK/EN), десятичный разделитель и разделитель тысяч, число знаков, моноширинный шрифт, горячая клавиша
 - **Командная строка:** `exocalc "600 usd in uah"`

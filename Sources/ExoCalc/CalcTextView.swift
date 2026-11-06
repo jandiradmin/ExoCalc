@@ -146,13 +146,29 @@ final class CalcTextView: NSTextView {
 
     // MARK: - Mouse
 
+    /// Generous click area around a result: a bit wider and the full line height.
+    private func hitRect(_ s: Slot) -> NSRect {
+        NSRect(x: s.rect.minX - 12, y: s.rect.minY - 4,
+               width: bounds.width - s.rect.minX + 12, height: s.rect.height + 8)
+    }
+
     override func mouseDown(with event: NSEvent) {
         let p = convert(event.locationInWindow, from: nil)
-        if let s = slots.first(where: { $0.isResult && $0.rect.insetBy(dx: -6, dy: -3).contains(p) }) {
-            let full = event.modifierFlags.contains(.shift) || event.modifierFlags.contains(.command)
-            onResultClick?(s.line, full)
+        let mods = event.modifierFlags
+        if let s = slots.first(where: { $0.isResult && hitRect($0).contains(p) }) {
+            onResultClick?(s.line, mods.contains(.shift) || mods.contains(.command))
             flash(s.line)
             return
+        }
+        // ⌘-click on an expression copies "expression = result"
+        if mods.contains(.command) && !mods.contains(.shift) {
+            let ch = characterIndexForInsertion(at: p)
+            let line = lineIndex(forChar: ch)
+            if line < results.count, results[line].display != nil {
+                onResultClick?(line, true)
+                flash(line)
+                return
+            }
         }
         super.mouseDown(with: event)
     }
@@ -160,7 +176,7 @@ final class CalcTextView: NSTextView {
     override func resetCursorRects() {
         super.resetCursorRects()
         for s in slots where s.isResult {
-            addCursorRect(s.rect.insetBy(dx: -6, dy: -3), cursor: .pointingHand)
+            addCursorRect(hitRect(s), cursor: .pointingHand)
         }
     }
 
