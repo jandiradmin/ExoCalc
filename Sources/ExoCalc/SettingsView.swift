@@ -80,10 +80,12 @@ struct SettingsView: View {
                 Toggle(tr("hideOnDeactivate"), isOn: $s.hideOnDeactivate)
                 Toggle(tr("alwaysOnTop"), isOn: $s.alwaysOnTop)
                 Toggle(tr("showHints"), isOn: $s.showHints)
-                Toggle(tr("launchAtLogin"), isOn: Binding(
-                    get: { ui.launchAtLogin },
-                    set: { setLogin($0) }
-                ))
+                if LoginItem.supported {
+                    Toggle(tr("launchAtLogin"), isOn: Binding(
+                        get: { ui.launchAtLogin },
+                        set: { setLogin($0) }
+                    ))
+                }
             }
 
             Section(tr("rates")) {
@@ -95,17 +97,13 @@ struct SettingsView: View {
                     .foregroundColor(.secondary)
             }
         }
-        .formStyle(.grouped)
+        .groupedForm()
         .frame(width: 520, height: 700)
     }
 
     private func setLogin(_ on: Bool) {
-        do {
-            if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
-        } catch {
-            NSSound.beep()
-        }
-        ui.launchAtLogin = SMAppService.mainApp.status == .enabled
+        if !LoginItem.set(on) { NSSound.beep() }
+        ui.launchAtLogin = LoginItem.isEnabled
     }
 }
 

@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "ExoCalc",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v12)],
     products: [
         .executable(name: "ExoCalc", targets: ["ExoCalc"]),
         .executable(name: "exocalc-cli", targets: ["exocalc-cli"]),

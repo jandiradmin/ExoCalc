@@ -27,32 +27,7 @@ struct HistoryView: View {
             }
             .padding(10)
 
-            List(selection: $ui.selection) {
-                ForEach(filtered) { e in
-                    HStack(spacing: 8) {
-                        Text(e.expr)
-                            .font(.system(size: 13, design: .monospaced))
-                            .lineLimit(1)
-                        Text("= \(e.result)")
-                            .font(.system(size: 13, design: .monospaced))
-                            .foregroundColor(Color(nsColor: Theme.result))
-                            .lineLimit(1)
-                        Spacer()
-                        Text(e.date, format: .dateTime.day().month(.twoDigits).hour().minute())
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .tag(e.id)
-                }
-            }
-            .contextMenu(forSelectionType: UUID.self) { ids in
-                Button(tr("insertToSheet")) { insert(ids) }
-                Button(tr("copyExprResult")) { copy(ids) }
-                Divider()
-                Button(tr("delete")) { history.remove(ids: ids) }
-            } primaryAction: { ids in
-                insert(ids)
-            }
+            list
 
             HStack {
                 Text(tr("historyCount", String(filtered.count)))
@@ -68,6 +43,53 @@ struct HistoryView: View {
             .padding(10)
         }
         .frame(minWidth: 540, minHeight: 400)
+    }
+
+    private func row(_ e: History.Entry) -> some View {
+        HStack(spacing: 8) {
+            Text(e.expr)
+                .font(.system(size: 13, design: .monospaced))
+                .lineLimit(1)
+            Text("= \(e.result)")
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundColor(Color(nsColor: Theme.result))
+                .lineLimit(1)
+            Spacer()
+            Text(e.date, format: .dateTime.day().month(.twoDigits).hour().minute())
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    @ViewBuilder private func menu(_ ids: Set<UUID>) -> some View {
+        Button(tr("insertToSheet")) { insert(ids) }
+        Button(tr("copyExprResult")) { copy(ids) }
+        Divider()
+        Button(tr("delete")) { history.remove(ids: ids) }
+    }
+
+    @ViewBuilder private var list: some View {
+        if #available(macOS 13, *) {
+            List(selection: $ui.selection) {
+                ForEach(filtered) { e in row(e).tag(e.id) }
+            }
+            .contextMenu(forSelectionType: UUID.self) { ids in
+                menu(ids)
+            } primaryAction: { ids in
+                insert(ids)
+            }
+        } else {
+            // macOS 12: menu per row, double-click inserts.
+            List(selection: $ui.selection) {
+                ForEach(filtered) { e in
+                    row(e)
+                        .contentShape(Rectangle())
+                        .tag(e.id)
+                        .contextMenu { menu(ui.selection.contains(e.id) ? ui.selection : [e.id]) }
+                        .onTapGesture(count: 2) { insert([e.id]) }
+                }
+            }
+        }
     }
 
     private func entries(_ ids: Set<UUID>) -> [History.Entry] {

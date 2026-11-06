@@ -8,7 +8,7 @@ import ServiceManagement
 
 final class SettingsUIState: ObservableObject {
     static let shared = SettingsUIState()
-    @Published var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @Published var launchAtLogin = LoginItem.isEnabled
 }
 
 final class RecorderState: ObservableObject {

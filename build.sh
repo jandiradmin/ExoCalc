@@ -11,9 +11,16 @@ if [[ "${1:-}" == "--test" ]]; then
     exit $?
 fi
 
-echo "▸ Сборка…"
-swift build -c release --arch arm64 --arch x86_64
-BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)"
+# Universal (Apple Silicon + Intel) needs full Xcode for macOS 11+ targets;
+# with Command Line Tools only, build for this Mac. Release builds: GitHub Actions.
+if [[ "${UNIVERSAL:-}" == "1" ]]; then
+    ARCHS=(--arch arm64 --arch x86_64)
+else
+    ARCHS=(--arch "$(uname -m)")
+fi
+echo "▸ Сборка (${ARCHS[*]})…"
+swift build -c release "${ARCHS[@]}"
+BIN="$(swift build -c release "${ARCHS[@]}" --show-bin-path)"
 
 APP="build/ExoCalc.app"
 rm -rf "$APP"

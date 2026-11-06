@@ -1,0 +1,41 @@
+name: macOS build
+
+on:
+  push:
+    branches: [main]
+    paths: ["Sources/**", "Package.swift", "Resources/**", "build.sh", ".github/workflows/macos.yml"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Full Xcode ships the Swift compatibility libraries for Intel,
+      # needed for a universal build that runs on macOS 11+.
+      - name: Build universal app
+        run: UNIVERSAL=1 ./build.sh
+
+      - name: Check binary
+        run: |
+          lipo -info build/ExoCalc.app/Contents/MacOS/ExoCalc
+          vtool -show-build build/ExoCalc.app/Contents/MacOS/ExoCalc | grep -E 'minos|platform' | head -4
+
+      - name: Zip
+        run: ditto -c -k --keepParent build/ExoCalc.app build/ExoCalc-macOS.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ExoCalc-macOS
+          path: build/ExoCalc-macOS.zip
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/ExoCalc-macOS.zip
