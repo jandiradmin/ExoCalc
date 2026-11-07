@@ -113,7 +113,7 @@ final class Parser {
         var cands: [(String, Int)] = []
         var acc = ""
         var k = j
-        while k < t.count && k < j + 3 {
+        while k < t.count && k < j + 5 {
             let tk = t[k]
             var ok = false
             if k == j {
@@ -123,7 +123,10 @@ final class Parser {
             } else if tk.kind == .op && (tk.text == "/" || tk.text == "^") {
                 ok = !tk.spaceBefore
             } else if tk.kind == .num {
-                ok = isOp(t[k - 1], "^") && !tk.spaceBefore
+                // "m^2", "l/100km", "литров на 100 км", "l per 100 km"
+                let prev = t[k - 1]
+                ok = ((isOp(prev, "^") || isOp(prev, "/")) && !tk.spaceBefore)
+                    || (prev.kind == .ident && ["на", "per"].contains(prev.text.lowercased()))
             }
             if !ok { break }
             acc += (k > j && tk.spaceBefore ? " " : "") + tk.text

@@ -1,7 +1,7 @@
 import Foundation
 
 public enum UnitDim: String {
-    case length, area, volume, mass, time, temperature, data, speed, angle, energy, power, pressure, frequency, currency
+    case length, area, volume, mass, time, temperature, data, speed, angle, energy, power, pressure, frequency, fuel, currency
 }
 
 /// A unit. Conversion to the base unit of its dimension: base = value * factor + offset.
@@ -159,6 +159,13 @@ private let unitDefs: [Def] = [
     d("kHz", .frequency, 1e3, ["кГц"]),
     d("MHz", .frequency, 1e6, ["МГц"]),
     d("GHz", .frequency, 1e9, ["ГГц"]),
+
+    // Fuel economy — base km/l; a negative factor means an inverse unit (l/100km = 100 / km/l)
+    d("km/l", .fuel, 1, ["kmpl", "km per liter", "km per litre", "км/л", "км на литр", "км на літр"]),
+    d("l/100km", .fuel, -100, ["l/100 km", "L/100km", "L/100 km", "l per 100 km", "liters per 100 km", "litres per 100 km", "liter per 100 km", "л/100км", "л/100 км", "л на 100 км", "литров на 100 км", "литра на 100 км", "литр на 100 км", "літрів на 100 км", "літра на 100 км", "літр на 100 км"]),
+    d("l/km", .fuel, -1, ["L/km", "л/км"]),
+    d("mpg", .fuel, 0.425143707430272, ["mpg us", "us mpg", "miles per gallon", "mile per gallon", "миль на галлон", "миль на галон", "миля на галлон"]),
+    d("mpg uk", .fuel, 0.3540061899346471, ["mpg imp", "uk mpg", "imperial mpg", "miles per imperial gallon"]),
 ]
 
 private let currencyAliases: [(String, [String])] = [
@@ -286,6 +293,13 @@ public final class UnitRegistry {
                 throw CalcError(tr("noRate", missing))
             }
             return v / a * b
+        }
+        // Inverse units (l/100km): base = |factor| / value
+        if from.factor < 0 || to.factor < 0 {
+            if v == 0 { throw CalcError(tr("divZero")) }
+            let base = from.factor < 0 ? -from.factor / v : v * from.factor + from.offset
+            if to.factor < 0 { return -to.factor / base }
+            return (base - to.offset) / to.factor
         }
         let base = v * from.factor + from.offset
         return (base - to.offset) / to.factor

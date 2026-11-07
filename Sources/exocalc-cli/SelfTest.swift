@@ -20,7 +20,7 @@ enum SelfTest {
             ("600 usd in uah", "24,000 UAH"), ("$20 + €15", "50 USD"), ("100 eur в грн", "8,000 UAH"),
             ("1000 грн to usd", "25 USD"), ("1 btc in usd", "100,000 USD"), ("usd in uah", "40 UAH"),
             ("18 Celsius in Fahrenheit", "64.4 °F"), ("100 °F in °C", "37.78 °C"), ("1 km + 500 m", "1.5 km"),
-            ("5 ft in cm", "152.4 cm"), ("1 GB in MB", "1,000 MB"), ("90 min in h", "1.5 h"),
+            ("5 ft in cm", "152.4 cm"), ("9 l/100km in mpg", "26.13 mpg"), ("26 mpg in l/100km", "9.05 l/100km"), ("9 л/100км в mpg", "26.13 mpg"), ("9 литров на 100 км в mpg", "26.13 mpg"), ("9 l/100km in km/l", "11.11 km/l"), ("30 mpg in mpg uk", "36.03 mpg uk"), ("0.09 l/km in l/100km", "9 l/100km"), ("10 l/2", "5 l"), ("1 GB in MB", "1,000 MB"), ("90 min in h", "1.5 h"),
             ("100 km/h in m/s", "27.78 m/s"), ("3 m * 4 m", "12 m²"), ("120 km / 1.5 h", "80 km/h"),
             ("10 соток в м2", "1,000 m²"), ("5 in in cm", "12.7 cm"), ("12 in", "12 in"),
             ("70 kg in lb", "154.32 lb"), ("1 gal in l", "3.79 l"),

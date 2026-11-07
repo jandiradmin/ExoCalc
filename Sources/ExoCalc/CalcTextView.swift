@@ -146,6 +146,22 @@ final class CalcTextView: NSTextView {
 
     // MARK: - Mouse
 
+    /// Line whose result is under a window point (for the window-level click monitor).
+    func resultLine(atWindowPoint wp: NSPoint) -> Int? {
+        let p = convert(wp, from: nil)
+        guard visibleRect.contains(p) else { return nil }
+        computeSlots()
+        return slots.first(where: { $0.isResult && hitRect($0).contains(p) })?.line
+    }
+
+    /// Line with a result under a window point, anywhere on the line (for ⌘-click).
+    func lineWithResult(atWindowPoint wp: NSPoint) -> Int? {
+        let p = convert(wp, from: nil)
+        guard visibleRect.contains(p) else { return nil }
+        let line = lineIndex(forChar: characterIndexForInsertion(at: p))
+        return line < results.count && results[line].display != nil ? line : nil
+    }
+
     /// Generous click area around a result: a bit wider and the full line height.
     private func hitRect(_ s: Slot) -> NSRect {
         NSRect(x: s.rect.minX - 12, y: s.rect.minY - 4,

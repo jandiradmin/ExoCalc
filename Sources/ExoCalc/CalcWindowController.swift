@@ -6,6 +6,7 @@ final class CalcWindowController: NSObject, NSWindowDelegate, NSTextViewDelegate
     let textView: CalcTextView
     let scrollView: NSScrollView
     let statusLabel: NSTextField
+    private var clickMonitor: Any?
     let engine: Engine
     let history: History
     private let textStorage: NSTextStorage   // keep TextKit 1 stack alive (layout manager/container are not retained by the text view)
@@ -175,6 +176,25 @@ final class CalcWindowController: NSObject, NSWindowDelegate, NSTextViewDelegate
 
         window.center()
         window.setFrameAutosaveName("ExoCalcMain")
+
+        // Clicks on results are caught before hit-testing, so the overlay scroller
+        // or text selection can never swallow them.
+        clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] e in
+            guard let self = self, e.window === self.window, e.clickCount == 1 else { return e }
+            let mods = e.modifierFlags
+            if let line = self.textView.resultLine(atWindowPoint: e.locationInWindow) {
+                self.copyLine(line, full: mods.contains(.shift) || mods.contains(.command))
+                self.textView.flash(line)
+                return nil
+            }
+            if mods.contains(.command), !mods.contains(.shift),
+               let line = self.textView.lineWithResult(atWindowPoint: e.locationInWindow) {
+                self.copyLine(line, full: true)
+                self.textView.flash(line)
+                return nil
+            }
+            return e
+        }
 
         tv.onEscape = { [weak self] in self?.onHide?() }
         tv.onNewline = { [weak self] idx in self?.recordHistory(line: idx) }

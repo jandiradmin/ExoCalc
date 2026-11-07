@@ -98,6 +98,12 @@ export const UNIT_DEFS = [
   ["kHz", "frequency", 1e3, ["кГц"], 0],
   ["MHz", "frequency", 1e6, ["МГц"], 0],
   ["GHz", "frequency", 1e9, ["ГГц"], 0],
+  // Fuel economy — base km/l; a negative factor means an inverse unit (l/100km = 100 / km/l)
+  ["km/l", "fuel", 1, ["kmpl", "km per liter", "km per litre", "км/л", "км на литр", "км на літр"], 0],
+  ["l/100km", "fuel", -100, ["l/100 km", "L/100km", "L/100 km", "l per 100 km", "liters per 100 km", "litres per 100 km", "liter per 100 km", "л/100км", "л/100 км", "л на 100 км", "литров на 100 км", "литра на 100 км", "литр на 100 км", "літрів на 100 км", "літра на 100 км", "літр на 100 км"], 0],
+  ["l/km", "fuel", -1, ["L/km", "л/км"], 0],
+  ["mpg", "fuel", 0.425143707430272, ["mpg us", "us mpg", "miles per gallon", "mile per gallon", "миль на галлон", "миль на галон", "миля на галлон"], 0],
+  ["mpg uk", "fuel", 0.3540061899346471, ["mpg imp", "uk mpg", "imperial mpg", "miles per imperial gallon"], 0],
 ];
 export const CURRENCY_ALIASES = [["USD", ["$", "usd", "dollar", "dollars", "buck", "bucks", "доллар", "доллара", "долларов", "доллары", "долларах", "долл", "бакс", "бакса", "баксов", "долар", "долари", "доларів", "доларах"]], ["EUR", ["€", "eur", "euro", "euros", "евро", "євро"]], ["UAH", ["₴", "uah", "hryvnia", "hryvnias", "hryvna", "грн", "гривна", "гривны", "гривен", "гривну", "гривнах", "гривень", "гривня", "гривні", "гривнях"]], ["GBP", ["£", "gbp", "sterling", "фунтов стерлингов", "фунт стерлингов", "фунтів стерлінгів"]], ["JPY", ["¥", "yen", "иена", "иен", "йена"]], ["CNY", ["yuan", "юань", "юаней", "юаня"]], ["PLN", ["zloty", "zł", "злотый", "злотых"]], ["CHF", ["franc", "francs", "франк", "франков"]], ["TRY", ["lira", "лира", "лир"]], ["BTC", ["₿", "bitcoin", "bitcoins", "биткоин", "биткоина", "биткоинов", "биток", "біткоїн", "біткоін"]], ["ETH", ["ether", "ethereum", "эфир", "эфира"]], ["USDT", ["tether"]], ["SOL", ["solana"]], ["DOGE", ["dogecoin"]], ["TON", ["toncoin"]]];
 export const CRYPTO_IDS = {"BTC": "bitcoin", "ETH": "ethereum", "USDT": "tether", "USDC": "usd-coin", "BNB": "binancecoin", "SOL": "solana", "XRP": "ripple", "TON": "the-open-network", "TRX": "tron", "DOGE": "dogecoin", "LTC": "litecoin", "ADA": "cardano"};

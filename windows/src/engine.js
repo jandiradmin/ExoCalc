@@ -191,6 +191,12 @@ export class UnitRegistry {
       }
       return (v / a) * b;
     }
+    // Inverse units (l/100km): base = |factor| / value
+    if (from.factor < 0 || to.factor < 0) {
+      if (v === 0) throw new CalcError(tr("divZero"));
+      const base = from.factor < 0 ? -from.factor / v : v * from.factor + from.offset;
+      return to.factor < 0 ? -to.factor / base : (base - to.offset) / to.factor;
+    }
     const base = v * from.factor + from.offset;
     return (base - to.offset) / to.factor;
   }
@@ -451,13 +457,18 @@ class Parser {
     if (j >= t.length || t[j].kind !== "ident") return null;
     const cands = [];
     let acc = "";
-    for (let k = j; k < t.length && k < j + 3; k++) {
+    for (let k = j; k < t.length && k < j + 5; k++) {
       const tk = t[k];
       let ok = false;
       if (k === j) ok = true;
       else if (tk.kind === "ident") ok = true;
       else if (tk.kind === "op" && (tk.text === "/" || tk.text === "^")) ok = !tk.spaceBefore;
-      else if (tk.kind === "num") ok = this.isOp(t[k - 1], "^") && !tk.spaceBefore;
+      else if (tk.kind === "num") {
+        // "m^2", "l/100km", "литров на 100 км", "l per 100 km"
+        const prev = t[k - 1];
+        ok = ((this.isOp(prev, "^") || this.isOp(prev, "/")) && !tk.spaceBefore)
+          || (prev.kind === "ident" && ["на", "per"].includes(prev.text.toLowerCase()));
+      }
       if (!ok) break;
       acc += (k > j && tk.spaceBefore ? " " : "") + tk.text;
       if (tk.kind === "ident" || tk.kind === "num") cands.push([acc, k - j + 1]);
