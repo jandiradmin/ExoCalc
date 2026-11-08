@@ -109,7 +109,7 @@ private let unitDefs: [Def] = [
     d("K", .temperature, 1, ["kelvin", "kelvins", "кельвин", "кельвина", "кельвін", "кельвіна"]),
 
     // Data — base byte
-    d("bit", .data, 0.125, ["bits", "бит", "бита", "битов"]),
+    d("bit", .data, 0.125, ["b", "bits", "бит", "бита", "битов"]),
     d("B", .data, 1, ["byte", "bytes", "байт", "байта", "байтов", "Б"]),
     d("KB", .data, 1e3, ["kB", "kilobyte", "kilobytes", "КБ", "Кб", "кб"]),
     d("MB", .data, 1e6, ["megabyte", "megabytes", "МБ", "Мб", "мб"]),
@@ -151,6 +151,7 @@ private let unitDefs: [Def] = [
     d("W", .power, 1, ["watt", "watts", "Вт", "вт"]),
     d("kW", .power, 1000, ["kilowatt", "kilowatts", "кВт", "квт", "кіловат"]),
     d("MW", .power, 1e6, ["megawatt", "megawatts", "МВт"]),
+    d("mW", .power, 1e-3, ["milliwatt", "milliwatts", "мВт"]),
     d("hp", .power, 745.69987158227, ["horsepower", "лс", "лошадиных сил", "кінських сил"]),
 
     // Pressure — base pascal
