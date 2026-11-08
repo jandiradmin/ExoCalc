@@ -7,6 +7,9 @@
 
 ## Sync between devices
 - [ ] Mac + iPhone/iPad via iCloud (sheet, history, settings; rates are not synced) — after the Apple Developer membership is paid
+  - First sync / conflicts: history = union by date (duplicates collapsed);
+    sheet = the most recently edited one, lines of the other sheet go to history marked "from <device>, <date>";
+    settings = most recently changed. Same rule for offline edits on two devices later. No line-by-line merging.
 - [ ] Later, if Windows is needed: own server, no registration, end-to-end encrypted.
       One device creates a sync code (QR / 24 characters); the code gives both the ID (hash) and the key (HKDF).
       The server stores only encrypted blobs and never sees the key.
