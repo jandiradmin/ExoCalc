@@ -1,0 +1,33 @@
+name: ExoCalc-iOS
+options:
+  bundleIdPrefix: com.jandiradmin
+  deploymentTarget:
+    iOS: "16.0"
+packages:
+  ExoCalcCore:
+    path: ..
+targets:
+  ExoCalc-iOS:
+    type: application
+    platform: iOS
+    sources: [ExoCalc]
+    dependencies:
+      - package: ExoCalcCore
+        product: ExoCalcCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jandiradmin.exocalc
+        PRODUCT_NAME: ExoCalc
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: ExoCalc
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UIUserInterfaceStyle: Dark
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Automatic

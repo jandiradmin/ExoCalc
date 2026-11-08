@@ -19,60 +19,8 @@ final class CalcWindowController: NSObject, NSWindowDelegate, NSTextViewDelegate
     private var statusOverrideUntil = Date.distantPast
     private let statusHeight: CGFloat = 24
 
-    private static func welcomeLines(hotkey: String) -> [String] {
-        switch L10n.lang {
-        case .ru: return [
-            "# Добро пожаловать в ExoCalc! Пишите выражение — ответ появится справа.",
-            "# F1 — справка · Esc — спрятать · \(hotkey) — вызвать из любого приложения",
-            "14*5", "500*4", "(2+2)*4", "2^10", "1/3", "",
-            "# Проценты", "20% от 1500", "1500 - 20%", "",
-            "# Валюты (курсы обновляются сами)", "600 долларов в гривнах", "100 евро в грн", "0.01 btc в usd", "",
-            "# Единицы измерения", "18 цельсия в фаренгейтах", "100 км в милях", "1 галлон в литрах", "70 кг в фунтах", "",
-            "# Время и даты", "18:15 - 9:40", "23:30 + 2 h", "15:00 Киев в LA", "сегодня + 30 дней", "31.12.2026 - сегодня", "",
-            "# Числа в любом формате", "300 000,00 * 2", "300,000.00 * 2", "",
-            "# Переменные и итоги", "цена = 1250", "цена * 3", "",
-            "Аренда: 2000", "Свет: 150", "итого",
-        ]
-        case .uk: return [
-            "# Ласкаво просимо до ExoCalc! Пишіть вираз — відповідь з’явиться праворуч.",
-            "# F1 — довідка · Esc — сховати · \(hotkey) — викликати з будь-якої програми",
-            "14*5", "500*4", "(2+2)*4", "2^10", "1/3", "",
-            "# Відсотки", "20% від 1500", "1500 - 20%", "",
-            "# Валюти (курси оновлюються самі)", "600 доларів у гривнях", "100 євро у грн", "0.01 btc у usd", "",
-            "# Одиниці виміру", "18 цельсія у фаренгейтах", "100 км у милях", "1 галон у літрах", "70 кг у фунтах", "",
-            "# Час і дати", "18:15 - 9:40", "23:30 + 2 h", "15:00 Київ у LA", "сьогодні + 30 днів", "31.12.2026 - сьогодні", "",
-            "# Числа в будь-якому форматі", "300 000,00 * 2", "300,000.00 * 2", "",
-            "# Змінні та підсумки", "ціна = 1250", "ціна * 3", "",
-            "Оренда: 2000", "Світло: 150", "разом",
-        ]
-        case .en: return [
-            "# Welcome to ExoCalc! Type an expression — the answer appears on the right.",
-            "# F1 — help · Esc — hide · \(hotkey) — open from any app",
-            "14*5", "500*4", "(2+2)*4", "2^10", "1/3", "",
-            "# Percentages", "20% of 1500", "1500 - 20%", "",
-            "# Currencies (rates update automatically)", "600 usd in uah", "100 eur in usd", "0.01 btc in usd", "",
-            "# Units", "18 celsius in fahrenheit", "100 km in miles", "1 gallon in liters", "70 kg in lb", "",
-            "# Time and dates", "18:15 - 9:40", "23:30 + 2 h", "15:00 Kyiv in LA", "today + 30 days", "12/31/2026 - today", "",
-            "# Numbers in any format", "300 000,00 * 2", "300,000.00 * 2", "",
-            "# Variables and totals", "price = 1250", "price * 3", "",
-            "Rent: 2000", "Power: 150", "total",
-        ]
-        }
-    }
-
-    /// Example sheet; each line shows its answer after "=", like a worked example.
     func welcomeText() -> String {
-        let lines = CalcWindowController.welcomeLines(hotkey: hotKeyText())
-        let res = engine.evaluate(lines: lines)
-        return zip(lines, res).map { line, r in
-            let t = line.trimmingCharacters(in: .whitespaces)
-            if t.isEmpty || t.hasPrefix("#") || t.contains("=") || t.allSatisfy({ $0.isLetter }) { return line }
-            // Lines that depend on today/now are not frozen with "= answer" (it would go stale).
-            if t.range(of: "(today|now|сегодня|сейчас|сьогодні|зараз|завтра|tomorrow|вчера|вчора|yesterday|\\bдо\\b|until|kyiv|київ|киев|\\bla\\b)",
-                       options: [.regularExpression, .caseInsensitive]) != nil { return line }
-            guard let d = r.display else { return line }
-            return "\(line) = \(d)"
-        }.joined(separator: "\n")
+        Examples.welcomeText(engine: engine, hotkey: hotKeyText())
     }
 
     @objc func insertExamples(_ sender: Any?) {
