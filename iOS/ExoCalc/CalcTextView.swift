@@ -38,7 +38,8 @@ final class CalcTextView: UITextView, UITextViewDelegate, UIGestureRecognizerDel
         textColor = Theme.text
         tintColor = Theme.result
         keyboardAppearance = .dark
-        keyboardType = numericKeyboard ? .decimalPad : .default
+        keyboardType = .default
+        inputView = numericKeyboard ? NumPad(target: self) : nil
         autocorrectionType = .no
         autocapitalizationType = .none
         spellCheckingType = .no
@@ -282,6 +283,12 @@ final class CalcTextView: UITextView, UITextViewDelegate, UIGestureRecognizerDel
 
     func insert(_ s: String) {
         insertText(s)
+        afterExternalChange()
+    }
+
+    func deleteOne() {
+        deleteBackward()
+        afterExternalChange()
     }
 
     // MARK: - Keyboard mode and undo
@@ -294,7 +301,8 @@ final class CalcTextView: UITextView, UITextViewDelegate, UIGestureRecognizerDel
 
     func toggleKeyboard() {
         numericKeyboard.toggle()
-        keyboardType = numericKeyboard ? .decimalPad : .default
+        // Our own keypad works with any keyboard (also third-party ones like SwiftKey).
+        inputView = numericKeyboard ? NumPad(target: self) : nil
         (inputAccessoryView as? KeyBar)?.updateModeKey()
         reloadInputViews()
     }
@@ -311,7 +319,7 @@ final class CalcTextView: UITextView, UITextViewDelegate, UIGestureRecognizerDel
         afterExternalChange()
     }
 
-    private func afterExternalChange() {
+    func afterExternalChange() {
         model?.textChanged(text)
         recalc()
         scrollRangeToVisible(selectedRange)
@@ -435,6 +443,107 @@ final class KeyBar: UIInputView {
 }
 
 extension KeyBar: UIInputViewAudioFeedback {
+    var enableInputClicksWhenVisible: Bool { true }
+}
+
+/// Digits keypad shown instead of the system keyboard in "123" mode.
+final class NumPad: UIInputView {
+    private weak var target: CalcTextView?
+    private var repeatTimer: Timer?
+
+    init(target: CalcTextView) {
+        self.target = target
+        let h: CGFloat = UIDevice.current.userInterfaceIdiom == .pad ? 300 : 236
+        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: h), inputViewStyle: .keyboard)
+        allowsSelfSizing = true
+        let sep = target.model?.decimalSeparator == "," ? "," : "."
+        let rows: [[String]] = [
+            ["7", "8", "9", "÷", "⌫"],
+            ["4", "5", "6", "×", "("],
+            ["1", "2", "3", "−", ")"],
+            ["0", sep, "%", "+", "⏎"],
+        ]
+        let grid = UIStackView()
+        grid.axis = .vertical
+        grid.spacing = 6
+        grid.distribution = .fillEqually
+        grid.translatesAutoresizingMaskIntoConstraints = false
+        for row in rows {
+            let r = UIStackView()
+            r.axis = .horizontal
+            r.spacing = 6
+            r.distribution = .fillEqually
+            for k in row { r.addArrangedSubview(key(k)) }
+            grid.addArrangedSubview(r)
+        }
+        addSubview(grid)
+        NSLayoutConstraint.activate([
+            grid.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 6),
+            grid.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -6),
+            grid.topAnchor.constraint(equalTo: topAnchor, constant: 6),
+            grid.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -4),
+            heightAnchor.constraint(equalToConstant: h),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func key(_ k: String) -> UIButton {
+        let isDigit = k.first?.isNumber == true || k == "." || k == ","
+        var cfg = UIButton.Configuration.filled()
+        cfg.title = k
+        cfg.cornerStyle = .medium
+        cfg.baseForegroundColor = .white
+        cfg.baseBackgroundColor = k == "⏎" ? Theme.result.withAlphaComponent(0.55)
+            : (isDigit ? UIColor(white: 0.36, alpha: 1) : UIColor(white: 0.24, alpha: 1))
+        cfg.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { a in
+            var a = a
+            a.font = UIFont.systemFont(ofSize: isDigit ? 26 : 22, weight: isDigit ? .regular : .medium)
+            return a
+        }
+        let b = UIButton(configuration: cfg)
+        if k == "⌫" {
+            b.addTarget(self, action: #selector(backDown), for: .touchDown)
+            b.addTarget(self, action: #selector(backUp), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+        } else {
+            b.addAction(UIAction { [weak self] _ in
+                UIDevice.current.playInputClick()
+                self?.press(k)
+            }, for: .touchUpInside)
+        }
+        return b
+    }
+
+    private func press(_ k: String) {
+        guard let t = target else { return }
+        switch k {
+        case "⏎": t.insert("\n")
+        case "÷": t.insert(" / ")
+        case "×": t.insert(" * ")
+        case "−": t.insert(" - ")
+        case "+": t.insert(" + ")
+        default: t.insert(k)
+        }
+    }
+
+    @objc private func backDown() {
+        UIDevice.current.playInputClick()
+        target?.deleteOne()
+        repeatTimer?.invalidate()
+        repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.45, repeats: false) { [weak self] _ in
+            self?.repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { [weak self] _ in
+                self?.target?.deleteOne()
+            }
+        }
+    }
+
+    @objc private func backUp() {
+        repeatTimer?.invalidate()
+        repeatTimer = nil
+    }
+}
+
+extension NumPad: UIInputViewAudioFeedback {
     var enableInputClicksWhenVisible: Bool { true }
 }
 
