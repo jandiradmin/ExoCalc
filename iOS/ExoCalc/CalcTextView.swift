@@ -38,7 +38,7 @@ final class CalcTextView: UITextView, UITextViewDelegate, UIGestureRecognizerDel
         textColor = Theme.text
         tintColor = Theme.result
         keyboardAppearance = .dark
-        keyboardType = .numbersAndPunctuation
+        keyboardType = numericKeyboard ? .decimalPad : .default
         autocorrectionType = .no
         autocapitalizationType = .none
         spellCheckingType = .no
@@ -284,6 +284,39 @@ final class CalcTextView: UITextView, UITextViewDelegate, UIGestureRecognizerDel
         insertText(s)
     }
 
+    // MARK: - Keyboard mode and undo
+
+    /// Digits keypad (operators are on the key bar) or the full text keyboard.
+    var numericKeyboard: Bool {
+        get { UserDefaults.standard.object(forKey: "numericKeyboard") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "numericKeyboard") }
+    }
+
+    func toggleKeyboard() {
+        numericKeyboard.toggle()
+        keyboardType = numericKeyboard ? .decimalPad : .default
+        (inputAccessoryView as? KeyBar)?.updateModeKey()
+        reloadInputViews()
+    }
+
+    func undoStep() {
+        guard let um = undoManager, um.canUndo else { UINotificationFeedbackGenerator().notificationOccurred(.warning); return }
+        um.undo()
+        afterExternalChange()
+    }
+
+    func redoStep() {
+        guard let um = undoManager, um.canRedo else { UINotificationFeedbackGenerator().notificationOccurred(.warning); return }
+        um.redo()
+        afterExternalChange()
+    }
+
+    private func afterExternalChange() {
+        model?.textChanged(text)
+        recalc()
+        scrollRangeToVisible(selectedRange)
+    }
+
     func appendText(_ s: String) {
         let t = text.hasSuffix("\n") || text.isEmpty ? String(s.drop(while: { $0 == "\n" })) : s
         text += (text.isEmpty || text.hasSuffix("\n") ? "" : "\n") + t
@@ -312,6 +345,7 @@ final class ResultLayer: UIView {
 /// Row of keys above the keyboard: operators, conversion words, currencies.
 final class KeyBar: UIInputView {
     private weak var target: CalcTextView?
+    private var modeKey: UIButton!
 
     init(target: CalcTextView) {
         self.target = target
@@ -339,8 +373,22 @@ final class KeyBar: UIInputView {
         let done = makeKey("⌄") { [weak self] in self?.target?.resignFirstResponder() }
         done.translatesAutoresizingMaskIntoConstraints = false
         addSubview(done)
+        // Fixed on the left: keyboard mode, undo, redo
+        let left = UIStackView()
+        left.axis = .horizontal
+        left.spacing = 6
+        left.translatesAutoresizingMaskIntoConstraints = false
+        modeKey = makeKey("abc") { [weak self] in self?.target?.toggleKeyboard() }
+        left.addArrangedSubview(modeKey)
+        left.addArrangedSubview(makeKey("↶") { [weak self] in self?.target?.undoStep() })
+        left.addArrangedSubview(makeKey("↷") { [weak self] in self?.target?.redoStep() })
+        addSubview(left)
+        updateModeKey()
         NSLayoutConstraint.activate([
-            scroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
+            left.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
+            left.topAnchor.constraint(equalTo: topAnchor, constant: 5),
+            left.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5),
+            scroll.leadingAnchor.constraint(equalTo: left.trailingAnchor, constant: 8),
             scroll.trailingAnchor.constraint(equalTo: done.leadingAnchor, constant: -6),
             scroll.topAnchor.constraint(equalTo: topAnchor, constant: 5),
             scroll.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5),
@@ -357,6 +405,13 @@ final class KeyBar: UIInputView {
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    /// "abc" switches to the text keyboard, "123" back to the digits keypad.
+    func updateModeKey() {
+        let numeric = target?.numericKeyboard ?? true
+        modeKey?.configuration?.title = numeric ? "abc" : "123"
+        modeKey?.configuration?.baseBackgroundColor = UIColor(white: 0.45, alpha: 1)
+    }
 
     private func makeKey(_ title: String, action: @escaping () -> Void) -> UIButton {
         var cfg = UIButton.Configuration.filled()
