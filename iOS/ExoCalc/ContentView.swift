@@ -25,6 +25,9 @@ struct ContentView: View {
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Menu {
+                        Button { model.editor?.undoStep() } label: { Label(tr("undo"), systemImage: "arrow.uturn.backward") }
+                        Button { model.editor?.redoStep() } label: { Label(tr("redo"), systemImage: "arrow.uturn.forward") }
+                        Divider()
                         Button { model.editor?.copyAll() } label: { Label(tr("copyAll"), systemImage: "doc.on.doc") }
                         Button { model.insertExamples() } label: { Label(tr("examples"), systemImage: "text.badge.plus") }
                         Button { model.refreshRates() } label: { Label(tr("refreshNow"), systemImage: "arrow.clockwise") }

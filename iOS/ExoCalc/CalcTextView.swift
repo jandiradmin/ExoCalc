@@ -354,12 +354,14 @@ final class ResultLayer: UIView {
 final class KeyBar: UIInputView {
     private weak var target: CalcTextView?
     private var modeKey: UIButton!
+    private var scroll: UIScrollView!
 
     init(target: CalcTextView) {
         self.target = target
         super.init(frame: CGRect(x: 0, y: 0, width: 320, height: 46), inputViewStyle: .keyboard)
         allowsSelfSizing = true
         let scroll = UIScrollView()
+        self.scroll = scroll
         scroll.showsHorizontalScrollIndicator = false
         scroll.translatesAutoresizingMaskIntoConstraints = false
         let stack = UIStackView()
@@ -388,8 +390,8 @@ final class KeyBar: UIInputView {
         left.translatesAutoresizingMaskIntoConstraints = false
         modeKey = makeKey("abc") { [weak self] in self?.target?.toggleKeyboard() }
         left.addArrangedSubview(modeKey)
-        left.addArrangedSubview(makeKey("↶") { [weak self] in self?.target?.undoStep() })
-        left.addArrangedSubview(makeKey("↷") { [weak self] in self?.target?.redoStep() })
+        left.addArrangedSubview(makeIconKey("arrow.uturn.backward") { [weak self] in self?.target?.undoStep() })
+        left.addArrangedSubview(makeIconKey("arrow.uturn.forward") { [weak self] in self?.target?.redoStep() })
         addSubview(left)
         updateModeKey()
         NSLayoutConstraint.activate([
@@ -419,6 +421,21 @@ final class KeyBar: UIInputView {
         let numeric = target?.numericKeyboard ?? true
         modeKey?.configuration?.title = numeric ? "abc" : "123"
         modeKey?.configuration?.baseBackgroundColor = UIColor(white: 0.45, alpha: 1)
+        // In "123" mode the keypad has all signs; the bar only scrolls extras over the text keyboard.
+        scroll?.isHidden = numeric
+    }
+
+    private func makeIconKey(_ symbol: String, action: @escaping () -> Void) -> UIButton {
+        var cfg = UIButton.Configuration.plain()
+        cfg.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold))
+        cfg.baseForegroundColor = UIColor(white: 0.85, alpha: 1)
+        cfg.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 8)
+        let b = UIButton(configuration: cfg, primaryAction: UIAction { _ in
+            UIDevice.current.playInputClick()
+            action()
+        })
+        b.widthAnchor.constraint(equalToConstant: 36).isActive = true
+        return b
     }
 
     private func makeKey(_ title: String, action: @escaping () -> Void) -> UIButton {
@@ -450,32 +467,18 @@ extension KeyBar: UIInputViewAudioFeedback {
 final class NumPad: UIInputView {
     private weak var target: CalcTextView?
     private var repeatTimer: Timer?
+    private let grid = UIStackView()
+    private var page = 0
 
     init(target: CalcTextView) {
         self.target = target
         let h: CGFloat = UIDevice.current.userInterfaceIdiom == .pad ? 300 : 236
         super.init(frame: CGRect(x: 0, y: 0, width: 320, height: h), inputViewStyle: .keyboard)
         allowsSelfSizing = true
-        let sep = target.model?.decimalSeparator == "," ? "," : "."
-        let rows: [[String]] = [
-            ["7", "8", "9", "÷", "⌫"],
-            ["4", "5", "6", "×", "("],
-            ["1", "2", "3", "−", ")"],
-            ["0", sep, "%", "+", "⏎"],
-        ]
-        let grid = UIStackView()
         grid.axis = .vertical
         grid.spacing = 6
         grid.distribution = .fillEqually
         grid.translatesAutoresizingMaskIntoConstraints = false
-        for row in rows {
-            let r = UIStackView()
-            r.axis = .horizontal
-            r.spacing = 6
-            r.distribution = .fillEqually
-            for k in row { r.addArrangedSubview(key(k)) }
-            grid.addArrangedSubview(r)
-        }
         addSubview(grid)
         NSLayoutConstraint.activate([
             grid.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 6),
@@ -484,12 +487,39 @@ final class NumPad: UIInputView {
             grid.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -4),
             heightAnchor.constraint(equalToConstant: h),
         ])
+        build()
+    }
+
+    /// Page 1: digits. Page 2 ("#+="): powers, currencies, units, conversion word.
+    private func build() {
+        grid.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        let sep = target?.model?.decimalSeparator == "," ? "," : "."
+        let conv = L10n.lang == .ru ? "в" : (L10n.lang == .uk ? "у" : "in")
+        let rows: [[String]] = page == 0 ? [
+            ["7", "8", "9", "÷", "⌫"],
+            ["4", "5", "6", "×", "("],
+            ["1", "2", "3", "−", ")"],
+            ["#+=", "0", sep, "+", "⏎"],
+        ] : [
+            ["^", "%", "=", ":", "⌫"],
+            ["$", "€", "₴", "btc", conv],
+            ["usd", "uah", "eur", "h", "min"],
+            ["123", "km", "kg", "#", "⏎"],
+        ]
+        for row in rows {
+            let r = UIStackView()
+            r.axis = .horizontal
+            r.spacing = 6
+            r.distribution = .fillEqually
+            for k in row { r.addArrangedSubview(key(k)) }
+            grid.addArrangedSubview(r)
+        }
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
     private func key(_ k: String) -> UIButton {
-        let isDigit = k.first?.isNumber == true || k == "." || k == ","
+        let isDigit = (k.first?.isNumber == true && k != "123") || k == "." || k == ","
         var cfg = UIButton.Configuration.filled()
         cfg.title = k
         cfg.cornerStyle = .medium
@@ -498,7 +528,7 @@ final class NumPad: UIInputView {
             : (isDigit ? UIColor(white: 0.36, alpha: 1) : UIColor(white: 0.24, alpha: 1))
         cfg.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { a in
             var a = a
-            a.font = UIFont.systemFont(ofSize: isDigit ? 26 : 22, weight: isDigit ? .regular : .medium)
+            a.font = UIFont.systemFont(ofSize: isDigit ? 26 : (k.count > 2 ? 18 : 22), weight: isDigit ? .regular : .medium)
             return a
         }
         let b = UIButton(configuration: cfg)
@@ -516,8 +546,16 @@ final class NumPad: UIInputView {
 
     private func press(_ k: String) {
         guard let t = target else { return }
+        let conv = L10n.lang == .ru ? "в" : (L10n.lang == .uk ? "у" : "in")
         switch k {
+        case "#+=", "123":
+            page = page == 0 ? 1 : 0
+            build()
         case "⏎": t.insert("\n")
+        case "=": t.insert(" = ")
+        case "usd", "uah", "eur", "btc", "km", "kg", "h", "min": t.insert(" " + k)
+        case conv: t.insert(" \(conv) ")
+        case "#": t.insert("# ")
         case "÷": t.insert(" / ")
         case "×": t.insert(" * ")
         case "−": t.insert(" - ")
