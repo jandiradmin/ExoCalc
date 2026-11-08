@@ -281,8 +281,25 @@ final class CalcTextView: UITextView, UITextViewDelegate, UIGestureRecognizerDel
         return nil
     }
 
+    /// Inserts a key's text without doubling spaces: "100 usd" + " in " + " btc" → "100 usd in btc".
     func insert(_ s: String) {
-        insertText(s)
+        var piece = s
+        let ns = text as NSString
+        let sel = selectedRange
+        let before: Character? = sel.location > 0 ? Character(ns.substring(with: NSRange(location: sel.location - 1, length: 1))) : nil
+        let afterLoc = sel.location + sel.length
+        let after: Character? = afterLoc < ns.length ? Character(ns.substring(with: NSRange(location: afterLoc, length: 1))) : nil
+        if piece != " " && piece != "\n" {
+            // No leading space at line start, after a space, or right after "/", "^", "(".
+            if before == nil || before == " " || before == "\n" || before == "/" || before == "^" || before == "(" {
+                piece = String(piece.drop(while: { $0 == " " }))
+            }
+            if after == " " { while piece.hasSuffix(" ") { piece.removeLast() } }
+        } else if piece == " " && (before == " " || after == " ") {
+            return
+        }
+        if piece.isEmpty { return }
+        insertText(piece)
         afterExternalChange()
     }
 
@@ -495,16 +512,17 @@ final class NumPad: UIInputView {
         grid.arrangedSubviews.forEach { $0.removeFromSuperview() }
         let sep = target?.model?.decimalSeparator == "," ? "," : "."
         let conv = L10n.lang == .ru ? "в" : (L10n.lang == .uk ? "у" : "in")
+        let at = L10n.lang == .en ? "at" : "при"
         let rows: [[String]] = page == 0 ? [
             ["7", "8", "9", "÷", "⌫"],
             ["4", "5", "6", "×", "("],
             ["1", "2", "3", "−", ")"],
             ["#+=", "0", sep, "+", "⏎"],
         ] : [
-            ["^", "%", "=", ":", "⌫"],
-            ["$", "€", "₴", "btc", conv],
-            ["usd", "uah", "eur", "h", "min"],
-            ["123", "km", "kg", "#", "⏎"],
+            ["^", "%", "=", ":", "/", "⌫"],
+            ["$", "€", "₴", "usd", "uah", "eur"],
+            ["btc", "km", "kg", "h", "min", "#"],
+            ["123", conv, at, "␣", "⏎"],
         ]
         for row in rows {
             let r = UIStackView()
@@ -547,6 +565,7 @@ final class NumPad: UIInputView {
     private func press(_ k: String) {
         guard let t = target else { return }
         let conv = L10n.lang == .ru ? "в" : (L10n.lang == .uk ? "у" : "in")
+        let at = L10n.lang == .en ? "at" : "при"
         switch k {
         case "#+=", "123":
             page = page == 0 ? 1 : 0
@@ -555,6 +574,9 @@ final class NumPad: UIInputView {
         case "=": t.insert(" = ")
         case "usd", "uah", "eur", "btc", "km", "kg", "h", "min": t.insert(" " + k)
         case conv: t.insert(" \(conv) ")
+        case at: t.insert(" \(at) ")
+        case "␣": t.insert(" ")
+        case "/": t.insert("/")
         case "#": t.insert("# ")
         case "÷": t.insert(" / ")
         case "×": t.insert(" * ")
