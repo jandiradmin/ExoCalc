@@ -5,6 +5,12 @@
 - [ ] Publish Mac + Windows: click to copy, ⌘/Ctrl-click expression, fuel economy, flow rate and pipe speed,
       sq/cubic units, mW/MW and b/B, case-ambiguity hints
 
+## Sync between devices
+- [ ] Mac + iPhone/iPad via iCloud (sheet, history, settings; rates are not synced) — after the Apple Developer membership is paid
+- [ ] Later, if Windows is needed: own server, no registration, end-to-end encrypted.
+      One device creates a sync code (QR / 24 characters); the code gives both the ID (hash) and the key (HKDF).
+      The server stores only encrypted blobs and never sees the key.
+
 ## Later
 - [ ] iPhone/iPad: history of calculations with search and clear
 - [ ] iPhone/iPad: widget / Shortcuts action
