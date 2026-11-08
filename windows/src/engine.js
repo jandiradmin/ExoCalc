@@ -455,6 +455,17 @@ class Parser {
   matchUnit(j) {
     const t = this.t;
     if (j >= t.length || t[j].kind !== "ident") return null;
+    // "sq feet", "кв футов", "cubic inches": square/cubic word + any length unit
+    const w = t[j].text.toLowerCase();
+    const SQ = ["sq", "square", "кв", "квадратных", "квадратный", "квадратного", "квадратних", "квадратний"];
+    const CU = ["cu", "cubic", "куб", "кубических", "кубический", "кубічних", "кубічний"];
+    if ((SQ.includes(w) || CU.includes(w)) && j + 1 < t.length) {
+      const m = this.matchUnit(j + 1);
+      if (m && m[0].dim === "length") {
+        const u = this.reg.lookup(m[0].id + (SQ.includes(w) ? "²" : "³"));
+        if (u) return [u, m[1] + 1];
+      }
+    }
     const cands = [];
     let acc = "";
     for (let k = j; k < t.length && k < j + 5; k++) {
@@ -921,6 +932,14 @@ class Parser {
       if ((a.unit.dim === "flow" && b.unit.dim === "time") || (a.unit.dim === "time" && b.unit.dim === "flow")) {
         const [q, t] = a.unit.dim === "flow" ? [a, b] : [b, a];
         return V(this.reg.convert(q.num, q.unit, this.reg.lookup("m³/s")) * this.reg.convert(t.num, t.unit, this.reg.lookup("s")), this.reg.lookup("m³"));
+      }
+      // area × length → volume: 2 ft * 3 ft * 4 ft
+      if ((a.unit.dim === "area" && b.unit.dim === "length") || (a.unit.dim === "length" && b.unit.dim === "area")) {
+        const [ar, ln] = a.unit.dim === "area" ? [a, b] : [b, a];
+        const R = this.reg, m3 = R.lookup("m³");
+        const v = R.convert(ar.num, ar.unit, R.lookup("m²")) * R.convert(ln.num, ln.unit, R.lookup("m"));
+        const cu = R.lookup(ln.unit.id + "³");
+        return cu ? V(R.convert(v, m3, cu), cu) : V(v, m3);
       }
       if (a.unit.dim === "length" && b.unit.dim === "length") {
         const bv = this.reg.convert(b.num, b.unit, a.unit);

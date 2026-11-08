@@ -108,8 +108,18 @@ final class Parser {
     }
 
     /// Longest unit/currency that starts at token j: "km", "km/h", "fl oz", "m^2", "кв м".
+    static let squareWords: Set<String> = ["sq", "square", "кв", "квадратных", "квадратный", "квадратного", "квадратних", "квадратний"]
+    static let cubicWords: Set<String> = ["cu", "cubic", "куб", "кубических", "кубический", "кубических", "кубічних", "кубічний"]
+
     func matchUnit(at j: Int) -> (CalcUnit, Int)? {
         guard j < t.count, t[j].kind == .ident else { return nil }
+        // "sq feet", "кв футов", "cubic inches": square/cubic word + any length unit
+        let w = t[j].text.lowercased()
+        if Parser.squareWords.contains(w) || Parser.cubicWords.contains(w), j + 1 < t.count,
+           let (lu, n) = matchUnit(at: j + 1), lu.dim == .length {
+            let sup = Parser.squareWords.contains(w) ? "²" : "³"
+            if let u = reg.lookup(lu.id + sup) { return (u, n + 1) }
+        }
         var cands: [(String, Int)] = []
         var acc = ""
         var k = j
@@ -776,6 +786,14 @@ final class Parser {
                let m3s = reg.lookup("m³/s"), let s = reg.lookup("s"), let m3 = reg.lookup("m³") {
                 let (q, t) = ua.dim == .flow ? (a, b) : (b, a)
                 return Value(try reg.convert(q.num, q.unit!, m3s) * reg.convert(t.num, t.unit!, s), unit: m3)
+            }
+            // area × length → volume: 2 ft * 3 ft * 4 ft
+            if (ua.dim == .area && ub.dim == .length) || (ua.dim == .length && ub.dim == .area),
+               let m2 = reg.lookup("m²"), let m = reg.lookup("m"), let m3 = reg.lookup("m³") {
+                let (ar, ln) = ua.dim == .area ? (a, b) : (b, a)
+                let v = try reg.convert(ar.num, ar.unit!, m2) * reg.convert(ln.num, ln.unit!, m)
+                if let cu = reg.lookup(ln.unit!.id + "³") { return Value(try reg.convert(v, m3, cu), unit: cu) }
+                return Value(v, unit: m3)
             }
             if ua.dim == .length && ub.dim == .length {
                 let bv = try reg.convert(b.num, ub, ua)
