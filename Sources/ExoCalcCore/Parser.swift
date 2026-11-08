@@ -18,6 +18,8 @@ final class Parser {
     private let ctx: Context
     var marks: [Highlight] = []
     var warnings: [String] = []
+    /// Marks applied after all others (they win over the unit colour).
+    var lateMarks: [Highlight] = []
     /// Formats a number for messages; set by the engine.
     var fmt: (Double) -> String = { String($0) }
     var fmtValue: (Value) -> String = { String($0.num) }
@@ -144,7 +146,16 @@ final class Parser {
             k += 1
         }
         for (s, n) in cands.reversed() {
-            if let u = reg.lookup(s) { return (u, n) }
+            if let u = reg.lookup(s) {
+                if let amb = reg.ambiguity(s), j + n - 1 < t.count {
+                    let h = Highlight(start: t[j].start, end: t[j + n - 1].end, kind: .error)
+                    if !lateMarks.contains(where: { $0.start == h.start }) {
+                        lateMarks.append(h)
+                        warnings.append(tr("ambUnit", s, amb.map { $0.id }.joined(separator: " / "), u.id))
+                    }
+                }
+                return (u, n)
+            }
         }
         return nil
     }

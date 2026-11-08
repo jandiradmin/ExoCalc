@@ -135,7 +135,7 @@ export class RateStore {
 export class UnitRegistry {
   constructor(rates) {
     this.rates = rates;
-    this.exact = new Map(); this.lower = new Map();
+    this.exact = new Map(); this.lower = new Map(); this.lowerAll = new Map();
     this.curExact = new Map(); this.curLower = new Map();
     this.stemUnit = new Map(); this.stemCur = new Map();
     const words = new Set();
@@ -145,6 +145,8 @@ export class UnitRegistry {
         if (!this.exact.has(a)) this.exact.set(a, u);
         const l = a.toLowerCase();
         if (!this.lower.has(l)) this.lower.set(l, u);
+        const all = this.lowerAll.get(l) || [];
+        if (!all.some((x) => x.id === u.id)) { all.push(u); this.lowerAll.set(l, all); }
         if (hasCyrillic(a)) { const st = stem(a); if (!this.stemUnit.has(st)) this.stemUnit.set(st, u); }
         words.add(a);
       }
@@ -163,6 +165,12 @@ export class UnitRegistry {
     this.completionWords = [...words].filter((w) => /^\p{L}/u.test(w)).sort();
   }
   currency(code) { return makeUnit(code, "currency", 1, 0, CRYPTO_IDS[code] !== undefined); }
+  // Units this spelling could mean when its case doesn't match exactly ("mw" → MW or mW).
+  ambiguity(s) {
+    if (this.exact.has(s) || this.curExact.has(s)) return null;
+    const list = this.lowerAll.get(s.toLowerCase());
+    return list && list.length > 1 ? list : null;
+  }
   lookup(s) {
     if (this.exact.has(s)) return this.exact.get(s);
     if (this.curExact.has(s)) return this.currency(this.curExact.get(s));
@@ -416,7 +424,7 @@ const copy = (v) => ({ ...v });
 
 class Parser {
   constructor(tokens, reg, ctx) {
-    this.t = tokens; this.i = 0; this.reg = reg; this.ctx = ctx; this.marks = []; this.warnings = [];
+    this.t = tokens; this.i = 0; this.reg = reg; this.ctx = ctx; this.marks = []; this.warnings = []; this.lateMarks = [];
     this.fmt = String; this.fmtValue = (v) => String(v.num); this.decimals = 2; this.override = null;
   }
   matches(typed, actual) {
@@ -486,6 +494,13 @@ class Parser {
     }
     for (let x = cands.length - 1; x >= 0; x--) {
       const u = this.reg.lookup(cands[x][0]);
+      if (u) {
+        const amb = this.reg.ambiguity(cands[x][0]), last = j + cands[x][1] - 1;
+        if (amb && last < t.length && !this.lateMarks.some((h) => h.start === t[j].start)) {
+          this.lateMarks.push({ start: t[j].start, end: t[last].end, kind: "error" });
+          this.warnings.push(tr("ambUnit", cands[x][0], amb.map((a) => a.id).join(" / "), u.id));
+        }
+      }
       if (u) return [u, cands[x][1]];
     }
     return null;
@@ -1170,7 +1185,7 @@ export class Engine {
         ctx.prev = v;
         ctx.block.push(v);
       }
-      res.highlights.push(...parser.marks);
+      res.highlights.push(...parser.marks, ...parser.lateMarks);
       res.warning = parser.warnings[0] || null;
     } catch (e) {
       res.value = null; res.display = null;

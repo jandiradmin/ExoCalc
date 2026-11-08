@@ -94,7 +94,7 @@ public final class Engine {
                 ctx.prev = v
                 ctx.block.append(v)
             }
-            res.highlights += p.marks
+            res.highlights += p.marks + p.lateMarks
             res.warning = p.warnings.first
         } catch let e as CalcError {
             res.error = e.message

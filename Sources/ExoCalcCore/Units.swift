@@ -213,6 +213,8 @@ public final class UnitRegistry {
     private var curLower: [String: String] = [:]
     private var stemUnit: [String: CalcUnit] = [:]
     private var stemCur: [String: String] = [:]
+    /// Lower-case spellings shared by units that differ only in case: "mw" → [MW, mW].
+    private var lowerAll: [String: [CalcUnit]] = [:]
     public let rates: RateStore
     public private(set) var completionWords: [String] = []
 
@@ -225,6 +227,7 @@ public final class UnitRegistry {
                 if exact[a] == nil { exact[a] = u }
                 let l = a.lowercased()
                 if lower[l] == nil { lower[l] = u }
+                if !(lowerAll[l] ?? []).contains(where: { $0.id == u.id }) { lowerAll[l, default: []].append(u) }
                 if UnitRegistry.hasCyrillic(a) {
                     let st = UnitRegistry.stem(a)
                     if stemUnit[st] == nil { stemUnit[st] = u }
@@ -274,6 +277,13 @@ public final class UnitRegistry {
             if let c = stemCur[st] { return currency(c) }
         }
         return nil
+    }
+
+    /// Units this spelling could mean when its case doesn't match exactly ("mw" → MW or mW).
+    public func ambiguity(_ s: String) -> [CalcUnit]? {
+        if exact[s] != nil || curExact[s] != nil { return nil }
+        guard let list = lowerAll[s.lowercased()], list.count > 1 else { return nil }
+        return list
     }
 
     static func hasCyrillic(_ s: String) -> Bool {
