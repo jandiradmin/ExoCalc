@@ -567,6 +567,10 @@ class Parser {
         this.mark(this.i, this.i, "keyword");
         this.mark(j, j + m[1] - 1, "unit");
         this.i = j + m[1];
+        if (v.unit && ((v.unit.dim === "flow" && m[0].dim === "speed") || (v.unit.dim === "speed" && m[0].dim === "flow"))) {
+          v = this.pipeConvert(v, v.unit, m[0]);
+          continue;
+        }
         v = this.convert(v, m[0]);
         continue;
       }
@@ -914,6 +918,10 @@ class Parser {
     if (b.isPercent) { const r = copy(a); r.num = (a.num * b.num) / 100; return r; }
     if (a.isPercent) { const r = copy(b); r.num = (b.num * a.num) / 100; return r; }
     if (a.unit && b.unit) {
+      if ((a.unit.dim === "flow" && b.unit.dim === "time") || (a.unit.dim === "time" && b.unit.dim === "flow")) {
+        const [q, t] = a.unit.dim === "flow" ? [a, b] : [b, a];
+        return V(this.reg.convert(q.num, q.unit, this.reg.lookup("m³/s")) * this.reg.convert(t.num, t.unit, this.reg.lookup("s")), this.reg.lookup("m³"));
+      }
       if (a.unit.dim === "length" && b.unit.dim === "length") {
         const bv = this.reg.convert(b.num, b.unit, a.unit);
         const area = this.reg.lookup(a.unit.id + "²");
@@ -939,6 +947,20 @@ class Parser {
         if (bv === 0) throw new CalcError(tr("divZero"));
         return V(a.num / bv);
       }
+      if (ua.dim === "volume" && ub.dim === "time") {
+        const base = this.reg.lookup("m³/s"), q = (a.num * ua.factor) / (b.num * ub.factor);
+        const d = this.reg.lookup(ua.id + "/" + ub.id), tu = d && d.dim === "flow" ? d : base;
+        return V(this.reg.convert(q, base, tu), tu);
+      }
+      if (ua.dim === "flow" && ub.dim === "area") {
+        const area = this.reg.convert(b.num, ub, this.reg.lookup("m²"));
+        if (area === 0) throw new CalcError(tr("divZero"));
+        return V(this.reg.convert(a.num, ua, this.reg.lookup("m³/s")) / area, this.reg.lookup("m/s"));
+      }
+      if (ua.dim === "length" && ub.dim === "time") {
+        const direct = this.reg.lookup(ua.id + "/" + ub.id);
+        if (direct && direct.dim === "speed") return V(this.reg.convert((a.num * ua.factor) / (b.num * ub.factor), this.reg.lookup("m/s"), direct), direct);
+      }
       if (ua.dim === "length" && ub.dim === "time") {
         const mps = (a.num * ua.factor) / (b.num * ub.factor);
         let target = "m/s";
@@ -951,6 +973,23 @@ class Parser {
     }
     if (!a.unit && b.unit) throw new CalcError(tr("divNumUnit", b.unit.id));
     const r = copy(a); r.num = a.num / b.num; return r;
+  }
+  // Flow ↔ speed in a round pipe: "1500 m3/h in m/s at 500 mm".
+  pipeConvert(v, from, to) {
+    const AT = ["at", "при", "для", "for", "d", "dn", "ø", "⌀"];
+    if (!(this.cur.kind === "ident" && AT.includes(this.cur.text.toLowerCase()))) throw new CalcError(tr("needDiameter"));
+    this.mark(this.i, this.i, "keyword"); this.i++;
+    while (this.cur.kind === "ident" && ["диаметре", "діаметрі", "diameter", "трубе", "трубі", "pipe", "dn", "d"].includes(this.cur.text.toLowerCase())) {
+      this.mark(this.i, this.i, "keyword"); this.i++;
+    }
+    const d = this.parseTerm();
+    const R = this.reg, m = R.lookup("m"), m3s = R.lookup("m³/s"), ms = R.lookup("m/s");
+    if (!d.unit || d.unit.dim !== "length") throw new CalcError(tr("needDiameter"));
+    const dm = R.convert(d.num, d.unit, m);
+    if (!(dm > 0)) throw new CalcError(tr("divZero"));
+    const area = (Math.PI * dm * dm) / 4;
+    if (from.dim === "flow") return V(R.convert(R.convert(v.num, from, m3s) / area, ms, to), to);
+    return V(R.convert(R.convert(v.num, from, ms) * area, m3s, to), to);
   }
   modulo(a, b) {
     let bv = b.num;

@@ -1,7 +1,7 @@
 import Foundation
 
 public enum UnitDim: String {
-    case length, area, volume, mass, time, temperature, data, speed, angle, energy, power, pressure, frequency, fuel, currency
+    case length, area, volume, mass, time, temperature, data, speed, angle, energy, power, pressure, frequency, fuel, flow, currency
 }
 
 /// A unit. Conversion to the base unit of its dimension: base = value * factor + offset.
@@ -120,8 +120,11 @@ private let unitDefs: [Def] = [
     d("Gb", .data, 1.25e8, ["Gbit", "gigabit", "gigabits", "Гбит", "гбит"]),
 
     // Speed — base m/s
-    d("m/s", .speed, 1, ["mps", "м/с"]),
-    d("km/h", .speed, 1.0 / 3.6, ["kmh", "kph", "kmph", "км/ч", "кмч"]),
+    d("m/s", .speed, 1, ["mps", "м/с", "m/sec", "meters per second", "metres per second", "м/сек", "метров в секунду", "метрів на секунду"]),
+    d("km/h", .speed, 1.0 / 3.6, ["kmh", "kph", "kmph", "км/ч", "кмч", "km/hr", "km/hour", "kilometers per hour", "км/год", "км/час", "километров в час", "кілометрів на годину"]),
+    d("km/s", .speed, 1000, ["km/sec", "км/с", "км/сек"]),
+    d("km/min", .speed, 16.666666666666668, ["km/minute", "km/mn", "км/мин", "км/хв"]),
+    d("m/min", .speed, 0.016666666666666666, ["m/minute", "м/мин", "м/хв"]),
     d("mph", .speed, 0.44704, ["mi/h", "миль/ч"]),
     d("kn", .speed, 0.5144444444444445, ["knot", "knots", "узел", "узлов", "узла"]),
     d("ft/s", .speed, 0.3048, ["fps"]),
@@ -159,6 +162,17 @@ private let unitDefs: [Def] = [
     d("kHz", .frequency, 1e3, ["кГц"]),
     d("MHz", .frequency, 1e6, ["МГц"]),
     d("GHz", .frequency, 1e9, ["ГГц"]),
+
+    // Flow rate — base m³/s
+    d("m³/s", .flow, 1, ["m3/s", "m^3/s", "m3/sec", "m³/sec", "cumec", "м3/с", "м³/с", "м3/сек", "кубов в секунду", "кубометров в секунду"]),
+    d("m³/min", .flow, 0.016666666666666666, ["m3/min", "m^3/min", "м3/мин", "м³/мин", "м3/хв", "м³/хв"]),
+    d("m³/h", .flow, 0.0002777777777777778, ["m3/h", "m^3/h", "m3/hr", "m³/hr", "m3/hour", "cubic meters per hour", "cubic metres per hour", "м3/ч", "м³/ч", "м3/час", "м3/год", "м³/год", "кубов в час", "куб/ч", "кубометров в час", "кубів на годину"]),
+    d("m³/day", .flow, 1.1574074074074073e-05, ["m3/day", "m3/d", "m^3/day", "м3/сут", "м³/сут", "м3/добу", "кубов в сутки"]),
+    d("l/s", .flow, 0.001, ["L/s", "lps", "l/sec", "л/с", "л/сек", "литров в секунду", "літрів на секунду"]),
+    d("l/min", .flow, 1.6666666666666667e-05, ["L/min", "lpm", "л/мин", "л/хв", "литров в минуту", "літрів на хвилину"]),
+    d("l/h", .flow, 2.7777777777777776e-07, ["L/h", "л/ч", "л/час", "л/год", "литров в час", "літрів на годину"]),
+    d("gpm", .flow, 6.30901964e-05, ["gal/min", "US gpm", "gallons per minute", "галлонов в минуту"]),
+    d("cfm", .flow, 0.0004719474432, ["ft3/min", "ft³/min", "cubic feet per minute"]),
 
     // Fuel economy — base km/l; a negative factor means an inverse unit (l/100km = 100 / km/l)
     d("km/l", .fuel, 1, ["kmpl", "km per liter", "km per litre", "км/л", "км на литр", "км на літр"]),

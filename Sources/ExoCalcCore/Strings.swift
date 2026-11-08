@@ -55,6 +55,7 @@ private let strings: [String: (String, String, String)] = [
     "mulUnits": ("нельзя перемножить {0} и {1}", "can't multiply {0} by {1}", "не можна перемножити {0} і {1}"),
     "divZero": ("деление на ноль", "division by zero", "ділення на нуль"),
     "divUnits": ("нельзя разделить {0} на {1}", "can't divide {0} by {1}", "не можна поділити {0} на {1}"),
+    "needDiameter": ("для перевода расхода в скорость укажите диаметр трубы: 1500 m3/h in m/s at 500 mm", "flow ↔ speed needs a pipe diameter: 1500 m3/h in m/s at 500 mm", "для переведення витрати у швидкість вкажіть діаметр труби: 1500 m3/h in m/s at 500 mm"),
     "divNumUnit": ("нельзя разделить число на {0}", "can't divide a number by {0}", "не можна поділити число на {0}"),
     "divGeneric": ("нельзя разделить", "can't divide", "не можна поділити"),
     "powNum": ("степень должна быть числом", "exponent must be a plain number", "степінь має бути числом"),

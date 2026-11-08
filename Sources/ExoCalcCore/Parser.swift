@@ -269,6 +269,10 @@ final class Parser {
                 mark(i, i, .keyword)
                 mark(j, j + m.1 - 1, .unit)
                 i = j + m.1
+                if let from = v.unit, (from.dim == .flow && m.0.dim == .speed) || (from.dim == .speed && m.0.dim == .flow) {
+                    v = try pipeConvert(v, from, to: m.0)
+                    continue
+                }
                 v = try convert(v, to: m.0)
                 continue
             }
@@ -768,6 +772,11 @@ final class Parser {
         if a.isPercent { var r = b; r.num = b.num * a.num / 100; return r }
         switch (a.unit, b.unit) {
         case (.some(let ua), .some(let ub)):
+            if (ua.dim == .flow && ub.dim == .time) || (ua.dim == .time && ub.dim == .flow),
+               let m3s = reg.lookup("m³/s"), let s = reg.lookup("s"), let m3 = reg.lookup("m³") {
+                let (q, t) = ua.dim == .flow ? (a, b) : (b, a)
+                return Value(try reg.convert(q.num, q.unit!, m3s) * reg.convert(t.num, t.unit!, s), unit: m3)
+            }
             if ua.dim == .length && ub.dim == .length {
                 let bv = try reg.convert(b.num, ub, ua)
                 if let area = reg.lookup(ua.id + "²") { return Value(a.num * bv, unit: area) }
@@ -796,6 +805,21 @@ final class Parser {
                 if bv == 0 { throw CalcError(tr("divZero")) }
                 return Value(a.num / bv)
             }
+            if ua.dim == .volume && ub.dim == .time, let base = reg.lookup("m³/s") {
+                let q = (a.num * ua.factor) / (b.num * ub.factor)
+                let tu = reg.lookup(ua.id + "/" + ub.id).flatMap { $0.dim == .flow ? $0 : nil } ?? base
+                return Value(try reg.convert(q, base, tu), unit: tu)
+            }
+            if ua.dim == .flow && ub.dim == .area, let m3s = reg.lookup("m³/s"), let m2 = reg.lookup("m²"), let ms = reg.lookup("m/s") {
+                let area = try reg.convert(b.num, ub, m2)
+                if area == 0 { throw CalcError(tr("divZero")) }
+                return Value(try reg.convert(a.num, ua, m3s) / area, unit: ms)
+            }
+            if ua.dim == .length && ub.dim == .time, let direct = reg.lookup(ua.id + "/" + ub.id), direct.dim == .speed,
+               let ms = reg.lookup("m/s") {
+                let mps = (a.num * ua.factor) / (b.num * ub.factor)
+                return Value(try reg.convert(mps, ms, direct), unit: direct)
+            }
             if ua.dim == .length && ub.dim == .time {
                 let mps = (a.num * ua.factor) / (b.num * ub.factor)
                 var target = "m/s"
@@ -813,6 +837,36 @@ final class Parser {
             return r
         }
         throw CalcError(tr("divGeneric"))
+    }
+
+    static let atWords: Set<String> = ["at", "при", "для", "for", "d", "dn", "ø", "⌀"]
+
+    /// Flow ↔ speed in a round pipe: "1500 m3/h in m/s at 500 mm".
+    private func pipeConvert(_ v: Value, _ from: CalcUnit, to: CalcUnit) throws -> Value {
+        guard cur.kind == .ident, Parser.atWords.contains(cur.text.lowercased()) else {
+            throw CalcError(tr("needDiameter"))
+        }
+        mark(i, i, .keyword)
+        i += 1
+        // optional words: "при диаметре 500 мм", "at diameter 500 mm"
+        while cur.kind == .ident, ["диаметре", "діаметрі", "diameter", "трубе", "трубі", "pipe", "dn", "d"].contains(cur.text.lowercased()) {
+            mark(i, i, .keyword)
+            i += 1
+        }
+        let d = try parseTerm()
+        guard let du = d.unit, du.dim == .length, let m = reg.lookup("m"),
+              let m3s = reg.lookup("m³/s"), let ms = reg.lookup("m/s") else {
+            throw CalcError(tr("needDiameter"))
+        }
+        let dm = try reg.convert(d.num, du, m)
+        guard dm > 0 else { throw CalcError(tr("divZero")) }
+        let area = Double.pi * dm * dm / 4
+        if from.dim == .flow {
+            let q = try reg.convert(v.num, from, m3s)
+            return Value(try reg.convert(q / area, ms, to), unit: to)
+        }
+        let s = try reg.convert(v.num, from, ms)
+        return Value(try reg.convert(s * area, m3s, to), unit: to)
     }
 
     private func modulo(_ a: Value, _ b: Value) throws -> Value {
