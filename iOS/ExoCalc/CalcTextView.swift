@@ -227,9 +227,27 @@ final class CalcTextView: UITextView, UITextViewDelegate, UIGestureRecognizerDel
         }
     }
 
+    /// Line under a point, if it has a result (for holding on an expression).
+    private func lineWithResult(at p: CGPoint) -> Int? {
+        let used = layoutManager.usedRect(for: textContainer)
+        guard p.y <= used.maxY + textContainerInset.top + 4,
+              let pos = closestPosition(to: p) else { return nil }
+        let ch = offset(from: beginningOfDocument, to: pos)
+        for (idx, r) in lineRanges.enumerated() where ch <= r.location + r.length {
+            return idx < results.count && results[idx].display != nil ? idx : nil
+        }
+        return nil
+    }
+
     override func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
-        if g === tapGR || g === holdGR {
+        if g === tapGR {
             return resultSlot(at: g.location(in: self)) != nil
+        }
+        if g === holdGR {
+            let p = g.location(in: self)
+            // Hold on a result — always; hold on an expression — when not typing
+            // (while typing, holding keeps moving the caret; the edit menu has "copy line").
+            return resultSlot(at: p) != nil || (!isFirstResponder && lineWithResult(at: p) != nil)
         }
         return super.gestureRecognizerShouldBegin(g)
     }
@@ -245,8 +263,25 @@ final class CalcTextView: UITextView, UITextViewDelegate, UIGestureRecognizerDel
     }
 
     @objc private func onHold(_ g: UILongPressGestureRecognizer) {
-        guard g.state == .began, let s = resultSlot(at: g.location(in: self)) else { return }
-        copyLine(s.line, full: true)
+        guard g.state == .began else { return }
+        let p = g.location(in: self)
+        if let s = resultSlot(at: p) { copyLine(s.line, full: true) }
+        else if let line = lineWithResult(at: p) { copyLine(line, full: true) }
+    }
+
+    /// While typing: the edit menu (hold, or tap the caret) gets "Copy expression = result".
+    @available(iOS 16.0, *)
+    func textView(_ tv: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+        var line: Int?
+        for (idx, r) in lineRanges.enumerated() where range.location <= r.location + r.length {
+            line = idx
+            break
+        }
+        guard let l = line, l < results.count, results[l].display != nil else { return nil }
+        let action = UIAction(title: tr("copyExprResult"), image: UIImage(systemName: "equal.square")) { [weak self] _ in
+            self?.copyLine(l, full: true)
+        }
+        return UIMenu(children: [action] + suggestedActions)
     }
 
     private func copyLine(_ idx: Int, full: Bool) {
