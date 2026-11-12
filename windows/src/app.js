@@ -176,6 +176,43 @@ function flashStatus(text) {
   setTimeout(updateStatus, 2600);
 }
 
+// ───────────────────────── Updates ─────────────────────────
+
+let update = null;          // { version, notes } when a newer version is on GitHub
+let appVer = "";
+let installing = false;
+
+async function checkForUpdate(manual) {
+  if (manual) flashStatus(tr("updChecking"));
+  try {
+    update = await P.checkUpdate();
+    if (manual && !update) flashStatus(tr("updNone", appVer));
+  } catch (e) {
+    if (manual) flashStatus(tr("updFailed", String(e)));
+  }
+  updateStatus();
+  if ($("sUpd")) $("sUpd").textContent = updateLabel();
+}
+
+function updateLabel() {
+  return update ? tr("updAvailable", update.version) : tr("versionW", appVer);
+}
+
+async function installUpdate() {
+  if (!update || installing) return;
+  installing = true;
+  statusUntil = Date.now() + 600000;
+  statusEl.className = "ok";
+  statusEl.textContent = tr("updInstalling", update.version);
+  try {
+    await P.installUpdate();   // the app restarts on success
+  } catch (e) {
+    installing = false;
+    statusUntil = 0;
+    flashStatus(tr("updFailed", String(e)));
+  }
+}
+
 function updateStatus() {
   if (Date.now() < statusUntil) return;
   const i = currentLine(), r = results[i];
@@ -183,6 +220,7 @@ function updateStatus() {
     statusEl.className = "err"; statusEl.textContent = "⚠ " + r.error; return;
   }
   if (r && r.warning && settings.showHints) { statusEl.className = "err"; statusEl.textContent = "⚠ " + r.warning; return; }
+  if (update) { statusEl.className = "upd"; statusEl.textContent = tr("updAvailable", update.version); return; }
   statusEl.className = "";
   statusEl.textContent = r && r.display ? tr("stResult") : tr("stDefault", settings.hotkey, ratesTimeText());
 }
@@ -464,7 +502,9 @@ function renderSettings(body) {
     <div class="group">${esc(tr("rates"))}</div>
     ${chk("sNBU", tr("useNBU"), s.useNBU)}
     <div class="row"><label id="sRates">${esc(ratesStatusText())}</label><button class="btn" id="sRefresh">${esc(tr("refreshNow"))}</button></div>
-    <p class="muted">${esc(tr("ratesSources"))}</p>`;
+    <p class="muted">${esc(tr("ratesSources"))}</p>
+    <div class="group">${esc(tr("updates"))}</div>
+    <div class="row"><label id="sUpd">${esc(updateLabel())}</label><button class="btn" id="sUpdBtn">${esc(update ? tr("updInstall") : tr("updCheck"))}</button></div>`;
   const preview = () => { $("sPreview").textContent = engine.number(1234567.5, s.decimals) + "   ·   " + engine.number(0.125, s.decimals); };
   preview();
   P.getAutostart().then((on) => { const el = $("sAuto"); if (el) el.checked = on; });
@@ -484,6 +524,7 @@ function renderSettings(body) {
   $("sAuto").onchange = (e) => { P.setAutostart(e.target.checked).catch(() => { e.target.checked = !e.target.checked; }); };
   $("sNBU").onchange = (e) => { s.useNBU = e.target.checked; rates.setUseNBU(s.useNBU); changed(); $("sRates").textContent = ratesStatusText(); };
   $("sRefresh").onclick = () => refreshRates(true);
+  $("sUpdBtn").onclick = () => (update ? installUpdate() : checkForUpdate(true));
   $("sHotkey").onclick = (e) => {
     recording = !recording;
     e.target.classList.toggle("rec", recording);
@@ -648,4 +689,10 @@ P.onEvent("open-help", () => openPanel("help"));
   if (settings.alwaysOnTop) P.setAlwaysOnTop(true);
   if (rates.isStale) refreshRates();
   setInterval(() => { if (rates.isStale) refreshRates(); }, 5 * 60 * 1000);
+
+  // Updates: check shortly after start and every 6 hours; click the status line to install.
+  appVer = await P.appVersion().catch(() => "");
+  statusEl.addEventListener("click", () => { if (update && statusEl.className === "upd") installUpdate(); });
+  setTimeout(() => checkForUpdate(false), 8000);
+  setInterval(() => checkForUpdate(false), 6 * 60 * 60 * 1000);
 })();

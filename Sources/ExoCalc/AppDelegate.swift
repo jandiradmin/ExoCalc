@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var cancellables = Set<AnyCancellable>()
     private var lastHotKey: (Int, Int) = (-1, -1)
     private var refreshTimer: Timer?
+    private var updateTimer: Timer?
     private var lastLang: Lang = L10n.lang
     private var snapshotMode = false
 
@@ -54,6 +55,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self = self else { return }
             if self.rates.isStale { self.refreshRates() }
         }
+
+        // Updates from GitHub Releases: shortly after start and every 12 hours.
+        Updater.shared.onChange = { [weak self] in self?.calc.updateStatus() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { Updater.shared.check() }
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 12 * 3600, repeats: true) { _ in Updater.shared.check() }
 
         s.objectWillChange
             .sink { [weak self] _ in DispatchQueue.main.async { self?.settingsChanged() } }
@@ -271,6 +277,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    @objc func checkUpdates() {
+        showWindow()
+        calc.flashStatus(tr("updChecking"))
+        Updater.shared.check { [weak self] result in
+            guard let self = self else { return }
+            switch result {
+            case .success(let r?):
+                let a = NSAlert()
+                a.messageText = tr("updAvailable", r.version).replacingOccurrences(of: "⬆ ", with: "")
+                a.addButton(withTitle: tr("updInstall"))
+                a.addButton(withTitle: tr("cancel"))
+                if a.runModal() == .alertFirstButtonReturn { self.calc.installUpdate() }
+            case .success(nil):
+                self.calc.flashStatus(tr("updNone", Updater.shared.currentVersion))
+            case .failure(let e):
+                self.calc.flashStatus(tr("updFailed", e.localizedDescription))
+            }
+        }
+    }
+
     private func makeStatusMenu() -> NSMenu {
         let m = NSMenu()
         func add(_ title: String, _ action: Selector) {
@@ -284,6 +310,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         add(tr("help"), #selector(showHelp))
         add(tr("settings…"), #selector(showSettings))
         add(tr("refreshRates"), #selector(refreshRates))
+        add(tr("updCheck") + "…", #selector(checkUpdates))
         m.addItem(.separator())
         let quit = NSMenuItem(title: tr("quit"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
         m.addItem(quit)
@@ -313,6 +340,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         submenu("ExoCalc", [
             item(tr("about"), #selector(showAbout), "", [], target: self),
             .separator(),
+            item(tr("updCheck") + "…", #selector(checkUpdates), "", [], target: self),
             item(tr("settings…"), #selector(showSettings), ",", target: self),
             .separator(),
             item(tr("closeWindow"), #selector(NSWindow.performClose(_:)), "w"),

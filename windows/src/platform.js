@@ -20,6 +20,9 @@ export async function fetchJSON(url) {
   return r.ok ? r.json() : null;
 }
 
+export async function appVersion() { return isTauri ? T.core.invoke("app_version") : "dev"; }
+export async function checkUpdate() { return isTauri ? T.core.invoke("check_update") : null; }
+export async function installUpdate() { if (isTauri) await T.core.invoke("install_update"); }
 export async function hideWindow() { if (isTauri) await T.core.invoke("hide_window"); }
 export async function setHotkey(accel) { if (isTauri) await T.core.invoke("set_hotkey", { accel }); }
 export async function setAlwaysOnTop(on) { if (isTauri) await T.core.invoke("set_always_on_top", { on }); }

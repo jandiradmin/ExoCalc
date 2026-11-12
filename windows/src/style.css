@@ -69,6 +69,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 #status { flex: 1; color: var(--status); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #status.err { color: var(--hint); }
 #status.ok { color: var(--res); }
+#status.upd { color: var(--res); cursor: pointer; text-decoration: underline dotted; }
 #buttons { display: flex; gap: 2px; }
 button.icon {
   background: none; border: 0; color: #9a9ca3; font-size: 14px; width: 26px; height: 22px;

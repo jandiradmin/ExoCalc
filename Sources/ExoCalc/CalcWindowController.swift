@@ -106,6 +106,7 @@ final class CalcWindowController: NSObject, NSWindowDelegate, NSTextViewDelegate
         statusLabel.font = .systemFont(ofSize: 11)
         statusLabel.textColor = Theme.status
         statusLabel.lineBreakMode = .byTruncatingTail
+        statusLabel.addGestureRecognizer(NSClickGestureRecognizer(target: self, action: #selector(statusClicked)))
         statusLabel.cell?.truncatesLastVisibleLine = true
 
         cv.addSubview(scrollView)
@@ -273,6 +274,22 @@ final class CalcWindowController: NSObject, NSWindowDelegate, NSTextViewDelegate
 
     // MARK: - Status bar
 
+    @objc private func statusClicked() {
+        guard Updater.shared.available != nil, !Updater.shared.installing else { return }
+        installUpdate()
+    }
+
+    func installUpdate() {
+        guard let u = Updater.shared.available else { return }
+        statusOverrideUntil = Date().addingTimeInterval(600)
+        statusLabel.textColor = Theme.result
+        statusLabel.stringValue = tr("updInstalling", u.version)
+        Updater.shared.install { [weak self] err in
+            self?.statusOverrideUntil = .distantPast
+            if let err = err { self?.flashStatus(tr("updFailed", (err as? CalcError)?.message ?? err.localizedDescription)) }
+        }
+    }
+
     func flashStatus(_ text: String) {
         statusOverrideUntil = Date().addingTimeInterval(2.5)
         statusLabel.textColor = Theme.result
@@ -297,6 +314,11 @@ final class CalcWindowController: NSObject, NSWindowDelegate, NSTextViewDelegate
             if let w = r.warning, AppSettings.shared.showHints {
                 statusLabel.textColor = Theme.hint
                 statusLabel.stringValue = "⚠︎ \(w)"
+                return
+            }
+            if let u = Updater.shared.available, !Updater.shared.installing {
+                statusLabel.textColor = Theme.result
+                statusLabel.stringValue = tr("updAvailable", u.version)
                 return
             }
             if r.display != nil {

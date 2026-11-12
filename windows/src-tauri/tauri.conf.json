@@ -28,7 +28,10 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "msi"],
+    "targets": [
+      "nsis",
+      "msi"
+    ],
     "publisher": "Yan Hordashevskyy",
     "copyright": "© 2026 Yan Hordashevskyy",
     "category": "Utility",
@@ -39,6 +42,18 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY5OTZFODQ5MTYxNEU4MTkKUldRWjZCUVdTZWlXYVdzbncyUUt1b0thSHY2UEtwdXltS1ZhT1cxTEYwU2QxVXEycThHa1hHRXAK",
+      "endpoints": [
+        "https://github.com/jandiradmin/ExoCalc/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }
